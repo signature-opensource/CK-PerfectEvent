@@ -75,6 +75,13 @@ namespace CK.PerfectEvent
             return Unsafe.As<PerfectEvent<TEvent>, PerfectEvent<TEventBase>>( ref @this );
         }
 
+        public PerfectEvent<TEventBase> UnsafeAdapt<TEventBase>() where TEventBase : class
+        {
+            Throw.CheckState( !typeof( TEvent ).IsValueType );
+            var @this = this;
+            return Unsafe.As<PerfectEvent<TEvent>, PerfectEvent<TEventBase>>( ref @this );
+        }
+
     }
 
 

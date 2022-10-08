@@ -1,6 +1,7 @@
 using CK.Core;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
@@ -23,6 +24,7 @@ namespace CK.PerfectEvent
         DelegateListImpl _seq;
         DelegateListImpl _seqAsync;
         DelegateListImpl _parallelAsync;
+        Action? _hasHandlersChanged;
 
         /// <summary>
         /// Gets the event that should be exposed to the external world: through the <see cref="PerfectEvent{TEvent}"/>,
@@ -40,22 +42,38 @@ namespace CK.PerfectEvent
         /// </summary>
         public void RemoveAll()
         {
-            _seq.RemoveAll();
-            _seqAsync.RemoveAll();
-            _parallelAsync.RemoveAll();
+            if( _seq.RemoveAll() || _seqAsync.RemoveAll() || _parallelAsync.RemoveAll() ) _hasHandlersChanged?.Invoke();
         }
 
-        internal void AddSeq( Delegate handler ) =>  _seq.Add( handler );
+        internal void AddSeq( Delegate handler )
+        {
+            if( _seq.Add( handler ) ) _hasHandlersChanged?.Invoke();
+        }
 
-        internal void RemoveSeq( Delegate handler ) => _seq.Remove( handler );
+        internal void RemoveSeq( Delegate handler )
+        {
+            if( _seq.Remove( handler ) ) _hasHandlersChanged?.Invoke();
+        }
 
-        internal void AddAsyncSeq( Delegate handler ) => _seqAsync.Add( handler );
+        internal void AddAsyncSeq( Delegate handler )
+        {
+            if( _seqAsync.Add( handler ) ) _hasHandlersChanged?.Invoke();
+        }
 
-        internal void RemoveAsyncSeq( Delegate handler ) => _seqAsync.Remove( handler );
+        internal void RemoveAsyncSeq( Delegate handler )
+        {
+            if( _seqAsync.Remove( handler ) ) _hasHandlersChanged?.Invoke();
+        }
 
-        internal void AddAsyncParallel( Delegate handler ) => _parallelAsync.Add( handler );
+        internal void AddAsyncParallel( Delegate handler )
+        {
+            if( _parallelAsync.Add( handler ) ) _hasHandlersChanged?.Invoke();
+        }
 
-        internal void RemoveAsyncParallel( Delegate handler ) => _parallelAsync.Remove( handler );
+        internal void RemoveAsyncParallel( Delegate handler )
+        {
+            if( _parallelAsync.Remove( handler ) ) _hasHandlersChanged?.Invoke();
+        }
 
         /// <summary>
         /// Same as <see cref="RaiseAsync"/> except that if exceptions occurred they are caught and logged
@@ -112,6 +130,115 @@ namespace CK.PerfectEvent
             Task task = _parallelAsync.RaiseParallelAsync( monitor, e, cancel );
             _seq.RaiseSequential( monitor, e, cancel );
             return Task.WhenAll( task, _seqAsync.RaiseSequentialAsync( monitor, e, cancel ) );
+        }
+
+        /// <summary>
+        /// Creates a bridge between this sender and another one, adapting the event type.
+        /// </summary>
+        /// <typeparam name="T">The target's event type.</typeparam>
+        /// <param name="target">The target that will receive converted events.</param>
+        /// <param name="converter">The conversion function.</param>
+        /// <returns>A disposable that can be used to remove the bridge.</returns>
+        public IDisposable BridgeTo<T>( PerfectEventSender<T> target, Func<TEvent,T> converter )
+        {
+            Throw.CheckNotNullArgument( target );
+            Throw.CheckNotNullArgument( converter );
+            return new Bridge<T>( this, target, converter );
+        }
+
+        sealed class Bridge<T> : IDisposable
+        {
+            readonly PerfectEventSender<T> Target;
+            readonly Func<TEvent, T> Converter;
+            readonly PerfectEventSender<TEvent> Source;
+            bool _seqSReg;
+            bool _seqAReg;
+            bool _seqPReg;
+            bool _diposed;
+
+            public Bridge( PerfectEventSender<TEvent> source, PerfectEventSender<T> target, Func<TEvent, T> converter )
+            {
+                Source = source;
+                Target = target;
+                Converter = converter;
+                target._hasHandlersChanged += OnTargetHandlersChanged;
+                OnTargetHandlersChanged();
+            }
+
+            void OnTargetHandlersChanged()
+            {
+                lock( Converter )
+                {
+                    if( _diposed ) return;
+                    if( Target._seq.HasHandlers )
+                    {
+                        if( !_seqSReg )
+                        {
+                            Source.AddSeq( OnSync );
+                            _seqSReg = true;
+                        }
+                    }
+                    else if( _seqSReg )
+                    {
+                        Source.RemoveSeq( OnSync );
+                        _seqSReg = false;
+                    }
+                    if( Target._seqAsync.HasHandlers )
+                    {
+                        if( !_seqAReg )
+                        {
+                            Source.AddAsyncSeq( OnAsync );
+                            _seqAReg = true;
+                        }
+                    }
+                    else if( _seqAReg )
+                    {
+                        Source.RemoveAsyncSeq( OnAsync );
+                        _seqAReg = false;
+                    }
+                    if( Target._parallelAsync.HasHandlers )
+                    {
+                        if( !_seqPReg )
+                        {
+                            Source.AddAsyncParallel( OnParallelAsync );
+                            _seqPReg = true;
+                        }
+                    }
+                    else if( _seqPReg )
+                    {
+                        Source.RemoveAsyncParallel( OnParallelAsync );
+                        _seqPReg = false;
+                    }
+                }
+            }
+
+            public void Dispose()
+            {
+                lock( Converter )
+                {
+                    if( _diposed ) return;
+                    _diposed = true;
+                    Target._hasHandlersChanged -= OnTargetHandlersChanged;
+                    if( _seqSReg ) Source.RemoveSeq( OnSync );
+                    if( _seqAReg ) Source.RemoveAsyncSeq( OnAsync );
+                    if( _seqPReg ) Source.RemoveAsyncParallel( OnParallelAsync );
+                }
+            }
+
+            internal void OnSync( IActivityMonitor monitor, TEvent e )
+            {
+                Target._seq.RaiseSequential( monitor, Converter( e ), default );
+            }
+
+            internal Task OnAsync( IActivityMonitor monitor, TEvent e, CancellationToken cancel )
+            {
+                return Target._seqAsync.RaiseSequentialAsync( monitor, Converter( e ), cancel );
+            }
+
+            internal Task OnParallelAsync( ActivityMonitor.DependentToken token, TEvent e, CancellationToken cancel )
+            {
+                return Target._parallelAsync.RaiseParallelAsync( token, Converter( e ), cancel );
+            }
         }
 
     }

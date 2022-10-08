@@ -6,6 +6,8 @@ using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Linq;
 using System.Threading;
+using System.Collections.Generic;
+using System.Threading.Channels;
 
 namespace CK.PerfectEvent
 {
@@ -15,10 +17,10 @@ namespace CK.PerfectEvent
 
         public bool HasHandlers => _handler != null;
 
-        public void Add( Delegate handler )
+        public bool Add( Delegate handler )
         {
             Throw.CheckNotNullArgument( handler );
-            Util.InterlockedNullableSet( ref _handler, handler, static (current,handler) =>
+            return Util.InterlockedNullableSet( ref _handler, handler, static (current,handler) =>
             {
                 if( current == null ) return handler;
                 if( current is Delegate d ) return new Delegate[] { d, handler };
@@ -27,17 +29,13 @@ namespace CK.PerfectEvent
                 Array.Resize( ref ah, len + 1 );
                 ah[len] = handler;
                 return ah;
-            } );
+            } ) is Delegate;
         }
 
-        /// <summary>
-        /// Removes a handler if it exists. This is an atomic (thread safe) operation.
-        /// </summary>
-        /// <param name="handler">The handler to remove. Cannot be null.</param>
-        public void Remove( Delegate handler )
+        public bool Remove( Delegate handler )
         {
             Throw.CheckNotNullArgument( handler );
-            _ = Util.InterlockedNullableSet( ref _handler, handler, static (current,handler) =>
+            return Util.InterlockedNullableSet( ref _handler, handler, static (current,handler) =>
             {
                 if( current == null ) return null;
                 if( current is Delegate d ) return d == handler ? null : current;
@@ -50,10 +48,10 @@ namespace CK.PerfectEvent
                 Array.Copy( a, 0, ah, 0, idx );
                 Array.Copy( a, idx + 1, ah, idx, ah.Length - idx );
                 return ah;
-            } );
+            } ) == null;
         }
 
-        public void RemoveAll() => Interlocked.Exchange( ref _handler, null );
+        public bool RemoveAll() => Interlocked.Exchange( ref _handler, null ) != null;
 
         public void RaiseSequential<TEvent>( IActivityMonitor monitor, TEvent e, CancellationToken cancel )
         {
@@ -89,6 +87,15 @@ namespace CK.PerfectEvent
             var h = _handler;
             if( h == null || cancel.IsCancellationRequested ) return Task.CompletedTask;
             ActivityMonitor.DependentToken token = monitor.CreateDependentToken();
+            if( h is Delegate d ) return Unsafe.As<ParallelEventHandlerAsync<TEvent>>( d ).Invoke( token, e, cancel );
+            var all = Unsafe.As<ParallelEventHandlerAsync<TEvent>[]>( h );
+            return Task.WhenAll( all.Select( x => x.Invoke( token, e, cancel ) ) );
+        }
+
+        public Task RaiseParallelAsync<TEvent>( ActivityMonitor.DependentToken token, TEvent e, CancellationToken cancel )
+        {
+            var h = _handler;
+            if( h == null || cancel.IsCancellationRequested ) return Task.CompletedTask;
             if( h is Delegate d ) return Unsafe.As<ParallelEventHandlerAsync<TEvent>>( d ).Invoke( token, e, cancel );
             var all = Unsafe.As<ParallelEventHandlerAsync<TEvent>[]>( h );
             return Task.WhenAll( all.Select( x => x.Invoke( token, e, cancel ) ) );
