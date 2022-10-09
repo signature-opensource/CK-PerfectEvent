@@ -271,19 +271,23 @@ Note: `AsIReadOnlyDictionary` is a helper available in CK.Core ([here](https://g
 An important aspect of this feature is that bridge underlying implementation guaranties that:
 
 - Existing bridges has no impact on the source `HasHandlers` property as long as their targets don't have handlers. 
-This property can be safely used to skip raising events (typically avoiding the event object instantiation).
+This property can then be confidently used on a potential source of multiple events to totally skip raising events
+(typically avoiding the event object instantiation).
 - When raising an event, the converter is called once and only if the target has registered handlers or is itself bridged to 
 other senders that have handlers.
 - A dependent activity token is obtained once and only if at least one parallel handler exists on the source or
 in any subsequent targets. This token is then shared by all the parallel events across all targets.
-- Parallel, sequential and asynchronous sequential handlers are called uniformly across the source and all its bridged 
-targets.
+- Parallel, sequential and then asynchronous sequential handlers are called uniformly and in deterministic order 
+(depth-first traversal) across the source and all its bridged targets.
+- Bridges can safely create cycles. Events will be raised once by the first occurrence of the target in the 
+depth-first traversal of the bridges.
 - All this stuff (raising events, adding/removing handlers, bridging and disposing bridges)is thread-safe and can be safely
 called concurrently.
 
 There is no way to obtain these capabilities "from the outside": such bridges must be implemented "behind" the senders.
 
-
+The "cycle safe" capability is crucial: bridges can be freely established between senders without any knowledge of
+existing bridges.
 
 
 

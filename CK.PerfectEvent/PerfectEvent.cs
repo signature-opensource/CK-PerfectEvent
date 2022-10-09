@@ -26,6 +26,9 @@ namespace CK.PerfectEvent
 
         /// <summary>
         /// Gets the Synchronous event registration point.
+        /// <para>
+        /// Signature is <c>Action&lt;IActivityMonitor, TEvent&gt;</c>
+        /// </para>
         /// </summary>
         public event SequentialEventHandler<TEvent> Sync
         {
@@ -36,6 +39,9 @@ namespace CK.PerfectEvent
 #pragma warning disable VSTHRD200 // Use "Async" suffix for async methods
         /// <summary>
         /// Gets the Asynchronous event registration point.
+        /// <para>
+        /// Signature is <c>Action&lt;IActivityMonitor, TEvent, CancellationToken&gt;</c>
+        /// </para>
         /// </summary>
         public event SequentialEventHandlerAsync<TEvent> Async
         {
@@ -45,6 +51,9 @@ namespace CK.PerfectEvent
 
         /// <summary>
         /// Gets the Parallel Asynchronous event registration point.
+        /// <para>
+        /// Signature is <c>Action&lt;ActivityMonitor.DependentToken, TEvent, CancellationToken&gt;</c>
+        /// </para>
         /// </summary>
         public event ParallelEventHandlerAsync<TEvent> ParallelAsync
         {
@@ -70,18 +79,24 @@ namespace CK.PerfectEvent
         /// <returns>A perfect event for <typeparamref name="TEventBase"/>.</returns>
         public PerfectEvent<TEventBase> Adapt<TEventBase>() where TEventBase : class
         {
-            Throw.CheckState( !typeof( TEvent ).IsValueType && typeof( TEventBase ).IsAssignableFrom( typeof( TEvent ) ) );
+            Throw.CheckArgument( "The event type cannot be automatically adapted. You should use the CreateBridge to another dedicated PerfertEventSender instead.",
+                                 !typeof( TEvent ).IsValueType && typeof( TEventBase ).IsAssignableFrom( typeof( TEvent ) ) );
             var @this = this;
             return Unsafe.As<PerfectEvent<TEvent>, PerfectEvent<TEventBase>>( ref @this );
         }
 
-        public PerfectEvent<TEventBase> UnsafeAdapt<TEventBase>() where TEventBase : class
+        /// <summary>
+        /// Creates a bridge from this event to another sender, adapting the event type.
+        /// </summary>
+        /// <typeparam name="T">The target's event type.</typeparam>
+        /// <param name="target">The sender that will receive converted events.</param>
+        /// <param name="converter">The conversion function.</param>
+        /// <param name="isActive">By default the new bridge is active.</param>
+        /// <returns>A new bridge.</returns>
+        public IBridge CreateBridge<T>( PerfectEventSender<T> target, Func<TEvent, T> converter, bool isActive = true )
         {
-            Throw.CheckState( !typeof( TEvent ).IsValueType );
-            var @this = this;
-            return Unsafe.As<PerfectEvent<TEvent>, PerfectEvent<TEventBase>>( ref @this );
+            return _sender.CreateBridge( target, converter, isActive );
         }
-
     }
 
 

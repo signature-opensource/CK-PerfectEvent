@@ -82,23 +82,28 @@ namespace CK.PerfectEvent
             foreach( var h in all ) await h.Invoke( monitor, e, cancel ).ConfigureAwait( false );
         }
 
-        public Task RaiseParallelAsync<TEvent>( IActivityMonitor monitor, TEvent e, CancellationToken cancel )
+        public void CollectParallelTasks<TEvent>( IActivityMonitor monitor,
+                                                  TEvent e,
+                                                  CancellationToken cancel,
+                                                  ref ActivityMonitor.DependentToken? token,
+                                                  ref List<Task>? tasks )
         {
             var h = _handler;
-            if( h == null || cancel.IsCancellationRequested ) return Task.CompletedTask;
-            ActivityMonitor.DependentToken token = monitor.CreateDependentToken();
-            if( h is Delegate d ) return Unsafe.As<ParallelEventHandlerAsync<TEvent>>( d ).Invoke( token, e, cancel );
-            var all = Unsafe.As<ParallelEventHandlerAsync<TEvent>[]>( h );
-            return Task.WhenAll( all.Select( x => x.Invoke( token, e, cancel ) ) );
-        }
-
-        public Task RaiseParallelAsync<TEvent>( ActivityMonitor.DependentToken token, TEvent e, CancellationToken cancel )
-        {
-            var h = _handler;
-            if( h == null || cancel.IsCancellationRequested ) return Task.CompletedTask;
-            if( h is Delegate d ) return Unsafe.As<ParallelEventHandlerAsync<TEvent>>( d ).Invoke( token, e, cancel );
-            var all = Unsafe.As<ParallelEventHandlerAsync<TEvent>[]>( h );
-            return Task.WhenAll( all.Select( x => x.Invoke( token, e, cancel ) ) );
+            if( h == null || cancel.IsCancellationRequested ) return;
+            token ??= monitor.CreateDependentToken();
+            tasks ??= new List<Task>();
+            if( h is Delegate d )
+            {
+                tasks.Add( Unsafe.As<ParallelEventHandlerAsync<TEvent>>( d ).Invoke( token, e, cancel ) );
+            }
+            else
+            {
+                var all = Unsafe.As<ParallelEventHandlerAsync<TEvent>[]>( h );
+                foreach( var a in all )
+                {
+                    tasks.Add( a.Invoke( token, e, cancel ) );
+                }
+            }
         }
 
         #region With Sender

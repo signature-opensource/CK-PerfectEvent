@@ -18,7 +18,7 @@ using static CK.Testing.MonitorTestHelper;
 namespace CK.Core.Tests.Monitoring
 {
     [TestFixture]
-    public class PerfectEventAdapterTests
+    public partial class PerfectEventAdapterTests
     {
         class Sound
         {
@@ -54,7 +54,7 @@ namespace CK.Core.Tests.Monitoring
         {
             Parrot parrot = new Parrot();
             ISoundEmitter emitter = parrot;
-            var receiver = new Receiver();
+            var receiver = new SoundReceiver();
 
             emitter.Sound.Sync += receiver.OnSoundSync;
             emitter.Sound.Async += receiver.OnSoundAsync;
@@ -85,7 +85,7 @@ namespace CK.Core.Tests.Monitoring
                     Throw.NotSupportedException( "Never called since Adapt throws." );
                 }
             ).Should()
-            .Throw<InvalidOperationException>();
+            .Throw<ArgumentException>();
         }
 
         [Test]
@@ -99,11 +99,11 @@ namespace CK.Core.Tests.Monitoring
                 Throw.NotSupportedException( "Never called since Adapt throws." );
             }
             ).Should()
-            .Throw<InvalidOperationException>();
+            .Throw<ArgumentException>();
 
         }
 
-        class Receiver
+        sealed class SoundReceiver
         {
             List<string> _strings = new();
 
@@ -188,7 +188,7 @@ namespace CK.Core.Tests.Monitoring
             var sameArguments = sender.PerfectEvent.Adapt<IReadOnlyDictionary<string, List<string>>>();
 
             FluentActions.Invoking( () => sender.PerfectEvent.Adapt<IReadOnlyDictionary<string, IList<string>>>() )
-                .Should().Throw<InvalidOperationException>( @"The out modifier is just a ref: TryGetValue ""locks"" the TValue to be invariant..." );
+                .Should().Throw<ArgumentException>( @"The out modifier is just a ref: TryGetValue ""locks"" the TValue to be invariant..." );
         }
 
         static readonly Dictionary<string, List<string>> SampleDictionary = new()
@@ -241,8 +241,8 @@ namespace CK.Core.Tests.Monitoring
 
             mutableEvent.HasHandlers.Should().BeFalse( "Nobody subscribed to anything." );
 
-            mutableEvent.BridgeTo( readonlyEvent, d => d.AsIReadOnlyDictionary<string, List<string>, IReadOnlyList<string>>() );
-            mutableEvent.BridgeTo( stringCountEvent, e => e.Values.Select( l => l.Count ).Sum() );
+            mutableEvent.CreateBridge( readonlyEvent, d => d.AsIReadOnlyDictionary<string, List<string>, IReadOnlyList<string>>() );
+            mutableEvent.CreateBridge( stringCountEvent, e => e.Values.Select( l => l.Count ).Sum() );
 
             mutableEvent.HasHandlers.Should().BeFalse( "A bridge is optimal: it doesn't register any handler until the target has handlers." );
 
@@ -264,23 +264,23 @@ namespace CK.Core.Tests.Monitoring
             PerfectEventSender<IReadOnlyDictionary<string, IReadOnlyList<string>>> readonlyEvent = new();
 
             {
-                var b = mutableEvent.BridgeTo( readonlyEvent, d => d.AsIReadOnlyDictionary<string, List<string>, IReadOnlyList<string>>() );
+                var b = mutableEvent.CreateBridge( readonlyEvent, d => d.AsIReadOnlyDictionary<string, List<string>, IReadOnlyList<string>>() );
                 readonlyEvent.PerfectEvent.Sync += HandleReadOnlyEvent;
                 mutableEvent.HasHandlers.Should().BeTrue();
-                b.Dispose();
+                b.IsActive = false;
                 mutableEvent.HasHandlers.Should().BeFalse();
                 readonlyEvent.PerfectEvent.Sync -= HandleReadOnlyEvent;
             }
             {
-                var b = mutableEvent.BridgeTo( readonlyEvent, d => d.AsIReadOnlyDictionary<string, List<string>, IReadOnlyList<string>>() );
+                var b = mutableEvent.CreateBridge( readonlyEvent, d => d.AsIReadOnlyDictionary<string, List<string>, IReadOnlyList<string>>() );
                 readonlyEvent.PerfectEvent.Async += HandleReadOnlyEventAsync;
                 mutableEvent.HasHandlers.Should().BeTrue();
-                b.Dispose();
+                b.IsActive = false;
                 mutableEvent.HasHandlers.Should().BeFalse();
                 readonlyEvent.PerfectEvent.Async -= HandleReadOnlyEventAsync;
             }
             {
-                var b = mutableEvent.BridgeTo( readonlyEvent, d => d.AsIReadOnlyDictionary<string, List<string>, IReadOnlyList<string>>() );
+                var b = mutableEvent.CreateBridge( readonlyEvent, d => d.AsIReadOnlyDictionary<string, List<string>, IReadOnlyList<string>>() );
                 readonlyEvent.PerfectEvent.ParallelAsync += HandleReadOnlyEventAsync;
                 mutableEvent.HasHandlers.Should().BeTrue();
                 b.Dispose();
@@ -305,7 +305,7 @@ namespace CK.Core.Tests.Monitoring
 
             public async Task LoopAsync( CancellationToken stop )
             {
-                var bridge = _source.BridgeTo( _adapted, o => o == this );
+                var bridge = _source.CreateBridge( _adapted, o => o == this );
                 int loopCount = 0;
                 while( !stop.IsCancellationRequested )
                 {
@@ -360,5 +360,6 @@ namespace CK.Core.Tests.Monitoring
             await Task.WhenAll( tasks );
             source.HasHandlers.Should().BeFalse();
         }
+
     }
 }

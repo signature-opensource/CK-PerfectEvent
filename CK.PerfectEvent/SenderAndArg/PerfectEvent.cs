@@ -20,31 +20,6 @@ namespace CK.PerfectEvent
             _sender = sender;
         }
 
-        class Animal { }
-        class Dog : Animal { }
-
-        static void DemoVariance()
-        {
-            SequentialEventHandler<Dog>? handlerOfDogs = null;
-            SequentialEventHandler<Animal>? handlerOfAnimals = null;
-
-            // Exact type match:
-            handlerOfDogs += OnDog;
-            handlerOfAnimals += OnAnimal;
-
-            // This is possible: the delegate that accepts an Animal can be called with a Dog.
-            handlerOfDogs += OnAnimal;
-
-            // Of course, this is not possible: one cannot call a Dog handler with a Cat!
-            // handlerOfAnimals += OnDog;
-        }
-
-        static void OnAnimal( IActivityMonitor monitor, Animal e ) { }
-
-        static void OnDog( IActivityMonitor monitor, Dog e ) { }
-
-
-
         /// <summary>
         /// Gets whether at least one handler is registered.
         /// </summary>
@@ -52,6 +27,9 @@ namespace CK.PerfectEvent
 
         /// <summary>
         /// Gets the Synchronous event registration point.
+        /// <para>
+        /// Signature is <c>Action&lt;IActivityMonitor, TSender, TEvent&gt;</c>
+        /// </para>
         /// </summary>
         public event SequentialEventHandler<TSender, TEvent> Sync
         {
@@ -62,6 +40,9 @@ namespace CK.PerfectEvent
 #pragma warning disable VSTHRD200 // Use "Async" suffix for async methods
         /// <summary>
         /// Gets the Asynchronous event registration point.
+        /// <para>
+        /// Signature is <c>Action&lt;IActivityMonitor, TSender, TEvent, CancellationToken&gt;</c>
+        /// </para>
         /// </summary>
         public event SequentialEventHandlerAsync<TSender, TEvent> Async
         {
@@ -71,6 +52,9 @@ namespace CK.PerfectEvent
 
         /// <summary>
         /// Gets the Parallel Asynchronous event registration point.
+        /// <para>
+        /// Signature is <c>Action&lt;ActivityMonitor.DependentToken, TSender, TEvent, CancellationToken&gt;</c>
+        /// </para>
         /// </summary>
         public event ParallelEventHandlerAsync<TSender, TEvent> ParallelAsync
         {
