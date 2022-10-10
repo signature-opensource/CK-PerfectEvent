@@ -114,7 +114,8 @@ event into the worker's mailbox is the best solution.
 
 ## Implementing and raising a Perfect Event
 
-A Perfect Event is implemented thanks to a [PerfectEventSender](CK.PerfectEvent/PerfectEventSender.cs). 
+A Perfect Event is implemented thanks to a [`PerfectEventSender<TEvent>`](CK.PerfectEvent/PerfectEventSender{TEvent}.cs)
+or [`PerfectEventSender<TSender,TEvent>`](CK.PerfectEvent/SenderAndArg/PerfectEventSender{TSender,TEvent}.cs)
 
 ```csharp
 class Thing : IThing
@@ -249,7 +250,7 @@ The `Adapt` method uses [Unsafe.As](http://unsafe.as). For this to work the type
 is required: `IsAssignableFrom`, no conversion, no implicit boxing (precisely what is checked at runtime by `Adapt`).
 
 Unfortunately sometimes we need to express a more "logical" covariance, typically to expose read only facade like
-a `Dictionary<string,List<int>>` exposed as a `IReadOnlyDictionary<string,IList<int>>`.
+a `Dictionary<string,List<int>>` exposed as a `IReadOnlyDictionary<string,IReadOnlyList<int>>`.
 
 This is not valid in .Net because the dictionary value is not defined as covariant: `IDictionary<TKey,TValue>` should
 be `IDictionary<TKey,out TValue>` but it's not: the out parameter of `bool TryGetValue( TKey k, out TValue v)`
@@ -307,7 +308,7 @@ only events raised on the Source will be considered, events coming from other br
 are ignored.
 
 > Playing with "graph of senders" is not easy. Bridges should be used primarily as type
-> adapters but it's safe and can be used freely.
+> adapters but bridges are always safe and can be used freely.
 
 #### Bridges can also filter the events
 

@@ -354,7 +354,7 @@ namespace CK.Core.Tests.Monitoring
 
             var source = new PerfectEventSender<object>();
             var guys = Enumerable.Range( 0, 70 ).Select( i => new GoodGuy( i, source ) );
-            var stop = new CancellationTokenSource( 4000 );
+            var stop = new CancellationTokenSource( 10000 );
             var tasks = guys.Select( g => Task.Run( () => g.LoopAsync( stop.Token ) ) ).ToArray();
 
             await Task.WhenAll( tasks );
