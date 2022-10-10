@@ -73,9 +73,38 @@ namespace CK.PerfectEvent
         /// <returns>A perfect event for <typeparamref name="TEventBase"/>.</returns>
         public PerfectEvent<TSender, TEventBase> Adapt<TEventBase>() where TEventBase : class
         {
-            Throw.CheckState( !typeof( TEvent ).IsValueType && typeof( TEventBase ).IsAssignableFrom( typeof( TEvent ) ) );
+            Throw.CheckArgument( "The event type cannot be automatically adapted. You should use the CreateBridge to another dedicated PerfertEventSender instead.",
+                                 !typeof( TEvent ).IsValueType && typeof( TEventBase ).IsAssignableFrom( typeof( TEvent ) ) );
             var @this = this;
             return Unsafe.As<PerfectEvent<TSender, TEvent>, PerfectEvent<TSender, TEventBase>>( ref @this );
+        }
+
+        /// <summary>
+        /// Creates a bridge from this event to another sender, adapting the event type.
+        /// </summary>
+        /// <typeparam name="T">The target's event type.</typeparam>
+        /// <param name="target">The sender that will receive converted events.</param>
+        /// <param name="converter">The conversion function.</param>
+        /// <param name="isActive">By default the new bridge is active.</param>
+        /// <returns>A new bridge.</returns>
+        public IBridge CreateBridge<T>( PerfectEventSender<TSender, T> target, Func<TEvent, T> converter, bool isActive = true )
+        {
+            return _sender.CreateBridge( target, converter, isActive );
+        }
+
+        /// <summary>
+        /// Creates a bridge from this event to another one that can filter the event before
+        /// adapting the event type and raising the event on the target.
+        /// </summary>
+        /// <typeparam name="T">The target's event type.</typeparam>
+        /// <param name="target">The target that will receive converted events.</param>
+        /// <param name="filter">The filter that must be satisfied for the event to be raised on the target.</param>
+        /// <param name="converter">The conversion function.</param>
+        /// <param name="isActive">By default the new bridge is active.</param>
+        /// <returns>A new bridge.</returns>
+        public IBridge CreateFilteredBridge<T>( PerfectEventSender<TSender, T> target, Func<TEvent, bool> filter, Func<TEvent, T> converter, bool isActive = true )
+        {
+            return _sender.CreateFilteredBridge( target, filter, converter, isActive );
         }
     }
 }

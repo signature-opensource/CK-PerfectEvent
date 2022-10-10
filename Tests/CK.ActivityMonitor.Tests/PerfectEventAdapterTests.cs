@@ -244,7 +244,7 @@ namespace CK.Core.Tests.Monitoring
             mutableEvent.CreateBridge( readonlyEvent, d => d.AsIReadOnlyDictionary<string, List<string>, IReadOnlyList<string>>() );
             mutableEvent.CreateBridge( stringCountEvent, e => e.Values.Select( l => l.Count ).Sum() );
 
-            mutableEvent.HasHandlers.Should().BeFalse( "A bridge is optimal: it doesn't register any handler until the target has handlers." );
+            mutableEvent.HasHandlers.Should().BeFalse( "A bridge is optimal: it doesn't register any handler until any of its downstream targets has handlers." );
 
             readonlyEvent.PerfectEvent.Sync += HandleReadOnlyEvent;
 
@@ -258,7 +258,7 @@ namespace CK.Core.Tests.Monitoring
         }
 
         [Test]
-        public void Bridge_can_be_disposed_to_remove_the_adaptation()
+        public void Bridge_can_be_disposed_or_IsActive_set_to_false_to_remove_the_adaptation()
         {
             PerfectEventSender<Dictionary<string, List<string>>> mutableEvent = new();
             PerfectEventSender<IReadOnlyDictionary<string, IReadOnlyList<string>>> readonlyEvent = new();
@@ -353,8 +353,8 @@ namespace CK.Core.Tests.Monitoring
             using var gLog = TestHelper.Monitor.OpenInfo( nameof( concurrent_stress_Bridge_Async ) );
 
             var source = new PerfectEventSender<object>();
-            var guys = Enumerable.Range( 0, 50 ).Select( i => new GoodGuy( i, source ) );
-            var stop = new CancellationTokenSource( 2000 );
+            var guys = Enumerable.Range( 0, 70 ).Select( i => new GoodGuy( i, source ) );
+            var stop = new CancellationTokenSource( 4000 );
             var tasks = guys.Select( g => Task.Run( () => g.LoopAsync( stop.Token ) ) ).ToArray();
 
             await Task.WhenAll( tasks );

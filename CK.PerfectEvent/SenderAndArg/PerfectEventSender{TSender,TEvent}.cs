@@ -3,23 +3,26 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Security.Principal;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using static Microsoft.IO.RecyclableMemoryStreamManager;
 
 namespace CK.PerfectEvent
 {
     /// <summary>
     /// A perfect event sender offers synchronous, asynchronous and parallel asynchronous event support.
     /// <para>
-    /// Instances of this class should be kept private: only the sender object should be able to call <see cref="RaiseAsync(IActivityMonitor, TEvent)"/>
-    /// or <see cref="SafeRaiseAsync(IActivityMonitor, TEvent, string?, int)"/>.
+    /// Instances of this class should be kept private: only the sender object should be able to call <see cref="RaiseAsync(IActivityMonitor, TSender, TEvent)"/>
+    /// or <see cref="SafeRaiseAsync(IActivityMonitor, TSender, TEvent, string?, int)"/>.
     /// What should be exposed is the <see cref="PerfectEvent"/> property that restricts the API to event registration and bridge management.
     /// </para>
     /// </summary>
+    /// <typeparam name="TSender">The type of the event sender.</typeparam>
     /// <typeparam name="TEvent">The type of the event argument.</typeparam>
-    public sealed class PerfectEventSender<TEvent> : IPerfectEventSender
+    public sealed class PerfectEventSender<TSender, TEvent> : IPerfectEventSender
     {
         DelegateListImpl _seq;
         DelegateListImpl _seqAsync;
@@ -28,10 +31,10 @@ namespace CK.PerfectEvent
         Action? _hasHandlersChanged;
 
         /// <summary>
-        /// Gets the event that should be exposed to the external world: through the <see cref="PerfectEvent{TEvent}"/>,
+        /// Gets the event that should be exposed to the external world: through the <see cref="PerfectEvent{TSender, TEvent}"/>,
         /// only registration/unregistration and bridging is possible.
         /// </summary>
-        public PerfectEvent<TEvent> PerfectEvent => new PerfectEvent<TEvent>( this );
+        public PerfectEvent<TSender, TEvent> PerfectEvent => new PerfectEvent<TSender, TEvent>( this );
 
         /// <inheritdoc />
         public bool HasHandlers => _seq.HasHandlers || _seqAsync.HasHandlers || _parallelAsync.HasHandlers || _activeBridges.Length > 0;
@@ -104,12 +107,14 @@ namespace CK.PerfectEvent
         /// </para>
         /// </summary>
         /// <param name="monitor">The monitor to use.</param>
+        /// <param name="sender">The sender of the event.</param>
         /// <param name="e">The argument of the event.</param>
         /// <param name="cancel">Optional cancellation token.</param>
         /// <param name="fileName">The source filename where this event is raised.</param>
         /// <param name="lineNumber">The source line number in the filename where this event is raised.</param>
         /// <returns>True on success, false if an exception occurred.</returns>
         public async Task<bool> SafeRaiseAsync( IActivityMonitor monitor,
+                                                TSender sender,
                                                 TEvent e,
                                                 CancellationToken cancel = default,
                                                 [CallerFilePath] string? fileName = null,
@@ -117,14 +122,14 @@ namespace CK.PerfectEvent
         {
             try
             {
-                await RaiseAsync( monitor, e, cancel ).ConfigureAwait( false );
+                await RaiseAsync( monitor, sender, e, cancel ).ConfigureAwait( false );
                 return true;
             }
             catch( Exception ex )
             {
                 if( monitor.ShouldLogLine( LogLevel.Error, null, out var finalTags ) )
                 {
-                    monitor.UnfilteredLog( LogLevel.Error|LogLevel.IsFiltered, finalTags, $"While raising event '{e}'.", ex, fileName, lineNumber );
+                    monitor.UnfilteredLog( LogLevel.Error | LogLevel.IsFiltered, finalTags, $"While raising event '{e}'.", ex, fileName, lineNumber );
                 }
                 return false;
             }
@@ -139,26 +144,31 @@ namespace CK.PerfectEvent
         /// </para>
         /// </summary>
         /// <param name="monitor">The monitor to use.</param>
+        /// <param name="sender">The sender of the event.</param>
         /// <param name="e">The argument of the event.</param>
         /// <param name="cancel">Optional cancellation token.</param>
-        public Task RaiseAsync( IActivityMonitor monitor, TEvent e, CancellationToken cancel = default )
+        public Task RaiseAsync( IActivityMonitor monitor,
+                                TSender sender,
+                                TEvent e,
+                                CancellationToken cancel = default )
         {
             var p = new StartRaiseParams( monitor, this, cancel );
-            StartRaise( ref p, e );
-            _seq.RaiseSequential( monitor, e, cancel );
+            StartRaise( ref p, sender, e );
+            _seq.RaiseSequential( monitor, sender, e, cancel );
             if( p.BridgeSenders != null )
             {
-                return RaiseWithBridgesAsync( monitor, e, p.BridgeSenders, p.ParallelTasks, cancel );
+                return RaiseWithBridgesAsync( monitor, sender, e, p.BridgeSenders, p.ParallelTasks, cancel );
             }
             if( p.ParallelTasks != null )
             {
-                p.ParallelTasks.Add( _seqAsync.RaiseSequentialAsync( monitor, e, cancel ) );
+                p.ParallelTasks.Add( _seqAsync.RaiseSequentialAsync( monitor, sender, e, cancel ) );
                 return Task.WhenAll( p.ParallelTasks );
             }
-            return _seqAsync.RaiseSequentialAsync( monitor, e, cancel );
+            return _seqAsync.RaiseSequentialAsync( monitor, sender, e, cancel );
         }
 
         async Task RaiseWithBridgesAsync( IActivityMonitor monitor,
+                                          TSender sender,
                                           TEvent e,
                                           List<IBridgeSender> bridgeSenders,
                                           List<Task>? parallelTasks,
@@ -168,7 +178,7 @@ namespace CK.PerfectEvent
             {
                 s.RaiseSync( monitor, cancel );
             }
-            await _seqAsync.RaiseSequentialAsync( monitor, e, cancel ).ConfigureAwait( false );
+            await _seqAsync.RaiseSequentialAsync( monitor, sender, e, cancel ).ConfigureAwait( false );
             foreach( var s in bridgeSenders )
             {
                 await s.RaiseAsync( monitor, cancel ).ConfigureAwait( false );
@@ -176,9 +186,9 @@ namespace CK.PerfectEvent
             if( parallelTasks != null ) await Task.WhenAll( parallelTasks ).ConfigureAwait( false );
         }
 
-        void StartRaise( ref StartRaiseParams p, TEvent e )
+        void StartRaise( ref StartRaiseParams p, TSender sender, TEvent e )
         {
-            _parallelAsync.CollectParallelTasks( p.Monitor, e, p.Cancel, ref p.Token, ref p.ParallelTasks );
+            _parallelAsync.CollectParallelTasks( p.Monitor, sender, e, p.Cancel, ref p.Token, ref p.ParallelTasks );
             var bridges = _activeBridges;
             if( bridges.Length > 0 )
             {
@@ -193,7 +203,7 @@ namespace CK.PerfectEvent
                         var skippedTarget = b.Target.AllowMultipleEvents ? null : b.Target;
                         if( p.BridgeSenders.Any( already => already.Bridge == b || already.Bridge.Target == skippedTarget ) ) continue;
                     }
-                    var s = b.CreateSender( e );
+                    var s = b.CreateSender( sender, e );
                     if( s != null )
                     {
                         p.BridgeSenders ??= new List<IBridgeSender>();
@@ -220,7 +230,7 @@ namespace CK.PerfectEvent
         /// <param name="converter">The conversion function.</param>
         /// <param name="isActive">By default the new bridge is active.</param>
         /// <returns>A new bridge.</returns>
-        public IBridge CreateBridge<T>( PerfectEventSender<T> target, Func<TEvent,T> converter, bool isActive = true )
+        public IBridge CreateBridge<T>( PerfectEventSender<TSender,T> target, Func<TEvent, T> converter, bool isActive = true )
         {
             return DoCreateBridge( target, null, converter, isActive );
         }
@@ -235,13 +245,13 @@ namespace CK.PerfectEvent
         /// <param name="converter">The conversion function.</param>
         /// <param name="isActive">By default the new bridge is active.</param>
         /// <returns>A new bridge.</returns>
-        public IBridge CreateFilteredBridge<T>( PerfectEventSender<T> target, Func<TEvent,bool> filter, Func<TEvent,T> converter, bool isActive = true )
+        public IBridge CreateFilteredBridge<T>( PerfectEventSender<TSender,T> target, Func<TEvent, bool> filter, Func<TEvent, T> converter, bool isActive = true )
         {
             Throw.CheckNotNullArgument( filter );
             return DoCreateBridge( target, filter, converter, isActive );
         }
 
-        IBridge DoCreateBridge<T>( PerfectEventSender<T> target, Func<TEvent, bool>? filter, Func<TEvent, T> converter, bool isActive )
+        IBridge DoCreateBridge<T>( PerfectEventSender<TSender,T> target, Func<TEvent, bool>? filter, Func<TEvent, T> converter, bool isActive )
         {
             Throw.CheckNotNullArgument( target );
             Throw.CheckNotNullArgument( converter );
@@ -251,22 +261,22 @@ namespace CK.PerfectEvent
 
         interface IInternalBridge : IBridge
         {
-            IBridgeSender? CreateSender( TEvent e );
+            IBridgeSender? CreateSender( TSender sender, TEvent e );
         }
 
         sealed class Bridge<T> : IInternalBridge
         {
-            readonly PerfectEventSender<T> _target;
+            readonly PerfectEventSender<TSender,T> _target;
             readonly Func<TEvent, bool>? _filter;
             readonly Func<TEvent, T> _converter;
-            readonly PerfectEventSender<TEvent> _source;
+            readonly PerfectEventSender<TSender,TEvent> _source;
             bool _isRegistered;
             bool _active;
             bool _onlyFromSource;
             bool _disposed;
 
-            public Bridge( PerfectEventSender<TEvent> source,
-                           PerfectEventSender<T> target,
+            public Bridge( PerfectEventSender<TSender,TEvent> source,
+                           PerfectEventSender<TSender,T> target,
                            Func<TEvent, bool>? filter,
                            Func<TEvent, T> converter,
                            bool active )
@@ -360,40 +370,43 @@ namespace CK.PerfectEvent
 
             sealed class BridgeSender : IBridgeSender
             {
-                readonly PerfectEventSender<T> _target;
+                readonly PerfectEventSender<TSender,T> _target;
+                readonly TSender _sender;
                 readonly T _converted;
 
                 public IBridge Bridge { get; }
 
-                public BridgeSender( IBridge bridge, PerfectEventSender<T> target, T converted )
+                public BridgeSender( IBridge bridge, PerfectEventSender<TSender, T> target, TSender sender, T converted )
                 {
                     Bridge = bridge;
                     _target = target;
                     _converted = converted;
+                    _sender = sender;
                 }
 
                 public void StartRaise( ref StartRaiseParams p )
                 {
-                    _target.StartRaise( ref p, _converted );
+                    _target.StartRaise( ref p, _sender, _converted );
                 }
 
                 public void RaiseSync( IActivityMonitor monitor, CancellationToken cancel )
                 {
-                    _target._seq.RaiseSequential( monitor, _converted, cancel );
+                    _target._seq.RaiseSequential( monitor, _sender, _converted, cancel );
                 }
 
                 public Task RaiseAsync( IActivityMonitor monitor, CancellationToken cancel )
                 {
-                    return _target._seqAsync.RaiseSequentialAsync( monitor, _converted, cancel );
+                    return _target._seqAsync.RaiseSequentialAsync( monitor, _sender, _converted, cancel );
                 }
             }
 
-            public IBridgeSender? CreateSender( TEvent e )
+            public IBridgeSender? CreateSender( TSender sender, TEvent e )
             {
                 return _filter?.Invoke( e ) == false
                         ? null
-                        : new BridgeSender( this, _target, _converter( e ) );
+                        : new BridgeSender( this, _target, sender, _converter( e ) );
             }
+
         }
 
     }

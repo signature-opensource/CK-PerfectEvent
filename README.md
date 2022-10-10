@@ -253,20 +253,21 @@ This is not valid in .Net because the dictionary value is not defined as covaria
 be `IDictionary<TKey,out TValue>` but it's not: the out parameter of `bool TryGetValue( TKey k, out TValue v)`
 ironically "locks" the type of the value (under the hood, `out` is just a `ref`).
 
-To handle this and any other projections, a converter function must be used. A `PerfectEventSender` can be bridged
-to another one:
+To handle this and any other projections, a converter function must be used. `PerfectEventSender` can be bridged
+to other ones:
 
 ```csharp
 PerfectEventSender<Dictionary<string, List<string>>> mutableEvent = new();
 PerfectEventSender<IReadOnlyDictionary<string, IReadOnlyList<string>>> readonlyEvent = new();
 PerfectEventSender<int> stringCountEvent = new();
 
-mutableEvent.BridgeTo( readonlyEvent, e => e.AsIReadOnlyDictionary<string, List<string>, IList<string>>() );
-mutableEvent.BridgeTo( stringCountEvent, e => e.Values.Select( l => l.Count ).Sum() );
+var bReadOnly = mutableEvent.CreateBridge( readonlyEvent, e => e.AsIReadOnlyDictionary<string, List<string>, IList<string>>() );
+var bCount = mutableEvent.CreateBridge( stringCountEvent, e => e.Values.Select( l => l.Count ).Sum() );
 ```
 Note: `AsIReadOnlyDictionary` is a helper available in CK.Core ([here](https://github.com/Invenietis/CK-Core/blob/master/CK.Core/Extension/DictionaryExtension.cs)).
 
-`BridgeTo` returns a `IDisposable`: if needed a bridge can be removed at any time.
+`CreateBridge` returns a [`IBridge : IDisposable`](CK.PerfectEvent/IBridge.cs): if needed a bridge can
+be activated or deactivated and definitely removed at any time.
 
 An important aspect of this feature is that bridge underlying implementation guaranties that:
 
@@ -278,16 +279,27 @@ other senders that have handlers.
 - A dependent activity token is obtained once and only if at least one parallel handler exists on the source or
 in any subsequent targets. This token is then shared by all the parallel events across all targets.
 - Parallel, sequential and then asynchronous sequential handlers are called uniformly and in deterministic order 
-(depth-first traversal) across the source and all its bridged targets.
-- Bridges can safely create cycles. Events will be raised once by the first occurrence of the target in the 
-depth-first traversal of the bridges.
-- All this stuff (raising events, adding/removing handlers, bridging and disposing bridges)is thread-safe and can be safely
-called concurrently.
+(breadth-first traversal) across the source and all its bridged targets.
+- Bridges can safely create cycles: bridges are triggered only once by their first occurrence in the 
+breadth-first traversal of the bridges.
+- All this stuff (raising events, adding/removing handlers, bridging and disposing bridges) is thread-safe and can 
+be safely called concurrently.
 
 There is no way to obtain these capabilities "from the outside": such bridges must be implemented "behind" the senders.
 
-The "cycle safe" capability is crucial: bridges can be freely established between senders without any knowledge of
-existing bridges.
+**The "cycle safe" capability is crucial**: bridges can be freely established between senders without any knowledge of
+existing bridges. However, cycles are hard to figure out (even if logically sound) and the fact that more than one
+event can be raised for a single call to `RaisAsync` or `SafeRaisAsync` can be annoying. By default, a sender raises
+only one event per `RaisAsync` (the first it receives). This can be changed thanks to the
+`bool AllowMultipleEvents { get; set; }` exposed by senders.
+
+On the bridge side, the `bool OnlyFromSource { get; set; }` can restrict a bridge to its Source:
+only events raised on the Source will be considered, events coming from other bridges
+are ignored.
+
+> Playing with "graph of senders" is not easy. Bridges should be used primarily as type
+> adapters but it's safe and can be used freely.
+
 
 
 

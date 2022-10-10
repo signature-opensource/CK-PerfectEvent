@@ -140,14 +140,29 @@ namespace CK.PerfectEvent
             foreach( var h in all ) await h.Invoke( monitor, sender, e, cancel ).ConfigureAwait( false );
         }
 
-        public Task RaiseParallelAsync<TSender,TEvent>( IActivityMonitor monitor, TSender sender, TEvent e, CancellationToken cancel )
+        public void CollectParallelTasks<TSender,TEvent>( IActivityMonitor monitor,
+                                                          TSender sender,
+                                                          TEvent e,
+                                                          CancellationToken cancel,
+                                                          ref ActivityMonitor.DependentToken? token,
+                                                          ref List<Task>? tasks )
         {
             var h = _handler;
-            if( h == null || cancel.IsCancellationRequested ) return Task.CompletedTask;
-            ActivityMonitor.DependentToken token = monitor.CreateDependentToken();
-            if( h is Delegate d ) return Unsafe.As<ParallelEventHandlerAsync<TSender,TEvent>>( d ).Invoke( token, sender, e, cancel );
-            var all = Unsafe.As<ParallelEventHandlerAsync<TSender,TEvent>[]>( h );
-            return Task.WhenAll( all.Select( x => x.Invoke( token, sender, e, cancel ) ) );
+            if( h == null || cancel.IsCancellationRequested ) return;
+            token ??= monitor.CreateDependentToken();
+            tasks ??= new List<Task>();
+            if( h is Delegate d )
+            {
+                tasks.Add( Unsafe.As<ParallelEventHandlerAsync<TSender,TEvent>>( d ).Invoke( token, sender, e, cancel ) );
+            }
+            else
+            {
+                var all = Unsafe.As<ParallelEventHandlerAsync<TSender,TEvent>[]>( h );
+                foreach( var a in all )
+                {
+                    tasks.Add( a.Invoke( token, sender, e, cancel ) );
+                }
+            }
         }
 
         #endregion

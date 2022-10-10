@@ -144,9 +144,9 @@ namespace CK.Core.Tests.Monitoring
         }
 
         [Test]
-        public async Task single_converter_call_and_single_DependentToken_tests_Async()
+        public async Task single_converter_call_and_single_DependentToken_and_breadth_first_traversal_Async()
         {
-            using var gLog = TestHelper.Monitor.OpenInfo( nameof( single_converter_call_and_single_DependentToken_tests_Async ) );
+            using var gLog = TestHelper.Monitor.OpenInfo( nameof( single_converter_call_and_single_DependentToken_and_breadth_first_traversal_Async ) );
 
             var root = new PerfectEventSender<string>();
             var tA = new TrackingBridgedSender( root, "A" );
@@ -275,25 +275,25 @@ namespace CK.Core.Tests.Monitoring
             noParallel.Should().StartWith( new[]
             {
                 // Synchronous callbacks are always called first (regardless of their depth in the bridges).
-                // The order is deterministic: it is a depth-first traversal of the bridges.
+                // The order is deterministic: it is a breadth-first traversal of the bridges.
                 "-Sync-Hop>A!",
+                "-Sync-Hop>B!",
                 "-Sync-Hop>A!>A1!",
                 "-Sync-Hop>A!>A1!>A1a!",
-                "-Sync-Hop>B!",
-                // Then all Asynchronous handlers are called (same depth-first traversal order).
+                // Then all Asynchronous handlers are called (same breadth-first traversal order).
                 ">-Async-Hop>A!",
                 "<-Async-Hop>A!",
+                ">-Async-Hop>B!",
+                "<-Async-Hop>B!",
                 ">-Async-Hop>A!>A1!",
                 "<-Async-Hop>A!>A1!",
                 ">-Async-Hop>A!>A1!>A1a!",
                 "<-Async-Hop>A!>A1!>A1a!",
-                ">-Async-Hop>B!",
-                "<-Async-Hop>B!",
             } );
         }
 
         [Test]
-        public async Task raising_with_cycles_follows_depth_first_traversal_Async()
+        public async Task synchronizing_2_events_Async()
         {
             var strings = new PerfectEventSender<string>();
             var numbers = new PerfectEventSender<double>();
@@ -325,13 +325,13 @@ namespace CK.Core.Tests.Monitoring
         }
 
         [Test]
-        public async Task NOT_GOOD_multiple_bridges_multiply_events_on_downstream_targets_Async()
+        public async Task bridge_triggers_only_once_by_default_Async()
         {
-            var strings = new PerfectEventSender<string>();
-            var objects = new PerfectEventSender<object>();
+            var strings = new PerfectEventSender<string>() { AllowMultipleEvents = true };
+            var objects = new PerfectEventSender<object>() { AllowMultipleEvents = true };
 
-            var b1 = strings.CreateBridge( objects, s => s );
-            var b2 = strings.CreateBridge( objects, s => s.Length );
+            var sToO = strings.CreateBridge( objects, s => s );
+            var sToOLen = strings.CreateBridge( objects, s => s.Length );
 
             var receivedByObjects = new List<object>();
             objects.PerfectEvent.Sync += ( monitor, o ) => receivedByObjects.Add( o );
@@ -347,31 +347,38 @@ namespace CK.Core.Tests.Monitoring
             receivedByStrings.Clear();
 
             // Now, we bridge objects back to strings:
-            var b3 = objects.CreateBridge( strings, o => "From Objects: " + o.ToString() );
+            var backBridge = objects.CreateBridge( strings, o => "From Objects: " + o.ToString() );
 
-            // When we send a string, the "back bridge" is skipped: strings raises only once its own primary event.
+            // When we send a string, the "back bridge" works.
             await strings.RaiseAsync( TestHelper.Monitor, "Hop!" );
-            receivedByObjects.Should().BeEquivalentTo( new object[] { "Hop!", 4 }, o => o.WithStrictOrdering(),
-                "The back bridge has no effects on the objects." );
-            receivedByObjects.Clear();
-            receivedByStrings.Should().BeEquivalentTo( new[] { "Hop!" }, o => o.WithStrictOrdering(),
-                "The strings received ONLY its own raising." );
+            receivedByStrings.Should().BeEquivalentTo( new[] { "Hop!", "From Objects: Hop!" }, o => o.WithStrictOrdering(),
+                "The back bridge did its job." );
             receivedByStrings.Clear();
+            receivedByObjects.Should().BeEquivalentTo( new object[] { "Hop!", 4 }, o => o.WithStrictOrdering(),
+                "The sToOLen 's => s.Length' bridge triggered only once (on the initial string)." );
+            receivedByObjects.Clear();
 
-            // However, when strings itself becomes a target, then the "back bridge" that acts normally
-            // leads to a multiplication of events on the final objects.
+            // Raising from preStrings leads to the same result. This is coherent.
             var preStrings = new PerfectEventSender<string>();
             preStrings.CreateBridge( strings, s => "From PreStrings: " + s );
 
             await preStrings.RaiseAsync( TestHelper.Monitor, "Hip!" );
-            receivedByObjects.Should().BeEquivalentTo( new object[] { "From PreStrings: Hip!", 35 }, o => o.WithStrictOrdering(),
-                "Fine. The final objects observes the source once." );
+            receivedByObjects.Should().BeEquivalentTo( new object[] { "From PreStrings: Hip!", 21 }, o => o.WithStrictOrdering(),
+                "Not a big surprise." );
             receivedByObjects.Clear();
             receivedByStrings.Should().BeEquivalentTo( new[] { "From PreStrings: Hip!", "From Objects: From PreStrings: Hip!" }, o => o.WithStrictOrdering(),
-                "Surprise! Since the raising has been done by preStrings and not strings, strings can observe the impact of the back channel..." );
+                "No big surprise again." );
             receivedByStrings.Clear();
 
-
+            // This deactivate the backbridge (when sending through preStrings or strings).
+            backBridge.OnlyFromSource = true;
+            await preStrings.RaiseAsync( TestHelper.Monitor, "Hip!" );
+            receivedByObjects.Should().BeEquivalentTo( new object[] { "From PreStrings: Hip!", 21 }, o => o.WithStrictOrdering(),
+                "Not a big surprise." );
+            receivedByObjects.Clear();
+            receivedByStrings.Should().BeEquivalentTo( new[] { "From PreStrings: Hip!" }, o => o.WithStrictOrdering(),
+                "No more back bridge." );
+            receivedByStrings.Clear();
         }
 
     }

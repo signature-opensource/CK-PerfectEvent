@@ -97,6 +97,22 @@ namespace CK.PerfectEvent
         {
             return _sender.CreateBridge( target, converter, isActive );
         }
+
+        /// <summary>
+        /// Creates a bridge from this event to another one that can filter the event before
+        /// adapting the event type and raising the event on the target.
+        /// </summary>
+        /// <typeparam name="T">The target's event type.</typeparam>
+        /// <param name="target">The target that will receive converted events.</param>
+        /// <param name="filter">The filter that must be satisfied for the event to be raised on the target.</param>
+        /// <param name="converter">The conversion function.</param>
+        /// <param name="isActive">By default the new bridge is active.</param>
+        /// <returns>A new bridge.</returns>
+        public IBridge CreateFilteredBridge<T>( PerfectEventSender<T> target, Func<TEvent, bool> filter, Func<TEvent, T> converter, bool isActive = true )
+        {
+            return _sender.CreateFilteredBridge( target, filter, converter, isActive );
+        }
+
     }
 
 

@@ -24,6 +24,16 @@ namespace CK.PerfectEvent
         bool IsActive { get; set; }
 
         /// <summary>
+        /// Gets or sets whether this bridge is restricted to its <see cref="Source"/>:
+        /// only events raised on the Source will be considered, events coming from other bridges
+        /// are ignored.
+        /// <para>
+        /// Defaults to false.
+        /// </para>
+        /// </summary>
+        bool OnlyFromSource { get; set; }
+
+        /// <summary>
         /// Gets whether this bridge has been disposed.
         /// </summary>
         bool IsDisposed { get; }

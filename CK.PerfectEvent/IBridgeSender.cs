@@ -2,6 +2,7 @@ using CK.Core;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -25,16 +26,16 @@ namespace CK.PerfectEvent
     struct StartRaiseParams
     {
         public readonly IActivityMonitor Monitor;
-        public readonly IPerfectEventSender Primary;
+        public readonly IPerfectEventSender Source;
         public readonly CancellationToken Cancel;
         public ActivityMonitor.DependentToken? Token;
         public List<Task>? ParallelTasks;
         public List<IBridgeSender>? BridgeSenders;
 
-        public StartRaiseParams( IActivityMonitor monitor, IPerfectEventSender primary, CancellationToken cancel )
+        public StartRaiseParams( IActivityMonitor monitor, IPerfectEventSender source, CancellationToken cancel )
         {
             Monitor = monitor;
-            Primary = primary;
+            Source = source;
             Cancel = cancel;
             Token = null;
             ParallelTasks = null;
