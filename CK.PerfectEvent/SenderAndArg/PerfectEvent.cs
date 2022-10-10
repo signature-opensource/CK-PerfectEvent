@@ -20,31 +20,6 @@ namespace CK.PerfectEvent
             _sender = sender;
         }
 
-        class Animal { }
-        class Dog : Animal { }
-
-        static void DemoVariance()
-        {
-            SequentialEventHandler<Dog>? handlerOfDogs = null;
-            SequentialEventHandler<Animal>? handlerOfAnimals = null;
-
-            // Exact type match:
-            handlerOfDogs += OnDog;
-            handlerOfAnimals += OnAnimal;
-
-            // This is possible: the delegate that accepts an Animal can be called with a Dog.
-            handlerOfDogs += OnAnimal;
-
-            // Of course, this is not possible: one cannot call a Dog handler with a Cat!
-            // handlerOfAnimals += OnDog;
-        }
-
-        static void OnAnimal( IActivityMonitor monitor, Animal e ) { }
-
-        static void OnDog( IActivityMonitor monitor, Dog e ) { }
-
-
-
         /// <summary>
         /// Gets whether at least one handler is registered.
         /// </summary>
@@ -52,6 +27,9 @@ namespace CK.PerfectEvent
 
         /// <summary>
         /// Gets the Synchronous event registration point.
+        /// <para>
+        /// Signature is <c>Action&lt;IActivityMonitor, TSender, TEvent&gt;</c>
+        /// </para>
         /// </summary>
         public event SequentialEventHandler<TSender, TEvent> Sync
         {
@@ -62,6 +40,9 @@ namespace CK.PerfectEvent
 #pragma warning disable VSTHRD200 // Use "Async" suffix for async methods
         /// <summary>
         /// Gets the Asynchronous event registration point.
+        /// <para>
+        /// Signature is <c>Action&lt;IActivityMonitor, TSender, TEvent, CancellationToken&gt;</c>
+        /// </para>
         /// </summary>
         public event SequentialEventHandlerAsync<TSender, TEvent> Async
         {
@@ -71,6 +52,9 @@ namespace CK.PerfectEvent
 
         /// <summary>
         /// Gets the Parallel Asynchronous event registration point.
+        /// <para>
+        /// Signature is <c>Action&lt;ActivityMonitor.DependentToken, TSender, TEvent, CancellationToken&gt;</c>
+        /// </para>
         /// </summary>
         public event ParallelEventHandlerAsync<TSender, TEvent> ParallelAsync
         {
@@ -89,9 +73,57 @@ namespace CK.PerfectEvent
         /// <returns>A perfect event for <typeparamref name="TEventBase"/>.</returns>
         public PerfectEvent<TSender, TEventBase> Adapt<TEventBase>() where TEventBase : class
         {
-            Throw.CheckState( !typeof( TEvent ).IsValueType && typeof( TEventBase ).IsAssignableFrom( typeof( TEvent ) ) );
+            Throw.CheckArgument( "The event type cannot be automatically adapted. You should use the CreateBridge to another dedicated PerfertEventSender instead.",
+                                 !typeof( TEvent ).IsValueType && typeof( TEventBase ).IsAssignableFrom( typeof( TEvent ) ) );
             var @this = this;
             return Unsafe.As<PerfectEvent<TSender, TEvent>, PerfectEvent<TSender, TEventBase>>( ref @this );
+        }
+
+        /// <summary>
+        /// Creates a bridge from this event to another sender, adapting the event type.
+        /// </summary>
+        /// <typeparam name="T">The target's event type.</typeparam>
+        /// <param name="target">The sender that will receive converted events.</param>
+        /// <param name="converter">The conversion function.</param>
+        /// <param name="isActive">By default the new bridge is active.</param>
+        /// <returns>A new bridge.</returns>
+        public IBridge CreateBridge<T>( PerfectEventSender<TSender, T> target, Func<TEvent, T> converter, bool isActive = true )
+        {
+            return _sender.CreateBridge( target, converter, isActive );
+        }
+
+        /// <summary>
+        /// Creates a bridge from this event to another sender that can filter the event before
+        /// adapting the event type and raising the event on the target.
+        /// </summary>
+        /// <typeparam name="T">The target's event type.</typeparam>
+        /// <param name="target">The target that will receive converted events.</param>
+        /// <param name="filter">The filter that must be satisfied for the event to be raised on the target.</param>
+        /// <param name="converter">The conversion function.</param>
+        /// <param name="isActive">By default the new bridge is active.</param>
+        /// <returns>A new bridge.</returns>
+        public IBridge CreateFilteredBridge<T>( PerfectEventSender<TSender,T> target,
+                                                Func<TEvent, bool> filter,
+                                                Func<TEvent, T> converter,
+                                                bool isActive = true )
+        {
+            return _sender.CreateFilteredBridge( target, filter, converter, isActive );
+        }
+
+        /// <summary>
+        /// Creates a bridge between this event to another sender with a function that filters and converts at once
+        /// (think <see cref="int.TryParse(string?, out int)"/>).
+        /// </summary>
+        /// <typeparam name="T">The target's event type.</typeparam>
+        /// <param name="target">The target that will receive converted events.</param>
+        /// <param name="filterConverter">The filter and conversion function.</param>
+        /// <param name="isActive">By default the new bridge is active.</param>
+        /// <returns>A new bridge.</returns>
+        public IBridge CreateFilteredBridge<T>( PerfectEventSender<TSender,T> target,
+                                                FilterConverter<TEvent, T> filterConverter,
+                                                bool isActive = true )
+        {
+            return _sender.CreateFilteredBridge( target, filterConverter, isActive );
         }
     }
 }

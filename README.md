@@ -162,6 +162,7 @@ public async Task<bool> SafeRaiseAsync( IActivityMonitor monitor, TSender sender
 
 ## Adapting the event type
 
+### Covariance: when types are compatible
 The signature of the `PerfectEvent<TEvent>` locks the type to invariantly be `TEvent`.
 However, a `PerfectEvent<Dog>` should be compatible with a `PerfectEvent<Animal>`: the event should be covariant, it
 should be specified as `PerfectEvent<out TEvent>`. Unfortunately this is not possible because `PerfectEvent` is a struct
@@ -241,8 +242,63 @@ So, the bad news is that there is as of today no compile time check for this `Ad
 is that safety is nevertheless checked at runtime when `Adapt` is called: adapters are forbidden when the event is a value type
 (boxing is not handled) and the adapted type must be a reference type that is assignable from the event type.
 
+### When types are not compatible
+The `Adapt` method uses [Unsafe.As](http://unsafe.as). For this to work the types must be compliant, "true covariance"
+is required: `IsAssignableFrom`, no conversion, no implicit boxing (precisely what is checked at runtime by `Adapt`).
 
+Unfortunately sometimes we need to express a more "logical" covariance, typically to expose read only facade like
+a `Dictionary<string,List<int>>` exposed as a `IReadOnlyDictionary<string,IList<int>>`.
 
+This is not valid in .Net because the dictionary value is not defined as covariant: `IDictionary<TKey,TValue>` should
+be `IDictionary<TKey,out TValue>` but it's not: the out parameter of `bool TryGetValue( TKey k, out TValue v)`
+ironically "locks" the type of the value (under the hood, `out` is just a `ref`).
+
+To handle this and any other projections, a converter function must be used. `PerfectEventSender` can be bridged
+to other ones:
+
+```csharp
+PerfectEventSender<Dictionary<string, List<string>>> mutableEvent = new();
+PerfectEventSender<IReadOnlyDictionary<string, IReadOnlyList<string>>> readonlyEvent = new();
+PerfectEventSender<int> stringCountEvent = new();
+
+var bReadOnly = mutableEvent.CreateBridge( readonlyEvent, e => e.AsIReadOnlyDictionary<string, List<string>, IList<string>>() );
+var bCount = mutableEvent.CreateBridge( stringCountEvent, e => e.Values.Select( l => l.Count ).Sum() );
+```
+Note: `AsIReadOnlyDictionary` is a helper available in CK.Core ([here](https://github.com/Invenietis/CK-Core/blob/master/CK.Core/Extension/DictionaryExtension.cs)).
+
+`CreateBridge` returns a [`IBridge : IDisposable`](CK.PerfectEvent/IBridge.cs): if needed a bridge can
+be activated or deactivated and definitely removed at any time.
+
+An important aspect of this feature is that bridge underlying implementation guaranties that:
+
+- Existing bridges has no impact on the source `HasHandlers` property as long as their targets don't have handlers. 
+This property can then be confidently used on a potential source of multiple events to totally skip raising events
+(typically avoiding the event object instantiation).
+- When raising an event, the converter is called once and only if the target has registered handlers or is itself bridged to 
+other senders that have handlers.
+- A dependent activity token is obtained once and only if at least one parallel handler exists on the source or
+in any subsequent targets. This token is then shared by all the parallel events across all targets.
+- Parallel, sequential and then asynchronous sequential handlers are called uniformly and in deterministic order 
+(breadth-first traversal) across the source and all its bridged targets.
+- Bridges can safely create cycles: bridges are triggered only once by their first occurrence in the 
+breadth-first traversal of the bridges.
+- All this stuff (raising events, adding/removing handlers, bridging and disposing bridges) is thread-safe and can 
+be safely called concurrently.
+
+There is no way to obtain these capabilities "from the outside": such bridges must be implemented "behind" the senders.
+
+**The "cycle safe" capability is crucial**: bridges can be freely established between senders without any knowledge of
+existing bridges. However, cycles are hard to figure out (even if logically sound) and the fact that more than one
+event can be raised for a single call to `RaisAsync` or `SafeRaisAsync` can be annoying. By default, a sender raises
+only one event per `RaisAsync` (the first it receives). This can be changed thanks to the
+`bool AllowMultipleEvents { get; set; }` exposed by senders.
+
+On the bridge side, the `bool OnlyFromSource { get; set; }` can restrict a bridge to its Source:
+only events raised on the Source will be considered, events coming from other bridges
+are ignored.
+
+> Playing with "graph of senders" is not easy. Bridges should be used primarily as type
+> adapters but it's safe and can be used freely.
 
 
 
