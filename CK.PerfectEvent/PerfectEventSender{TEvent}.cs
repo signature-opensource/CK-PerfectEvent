@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 
 namespace CK.PerfectEvent
 {
+
     /// <summary>
     /// A perfect event sender offers synchronous, asynchronous and parallel asynchronous event support.
     /// <para>
@@ -235,16 +236,36 @@ namespace CK.PerfectEvent
         /// <param name="converter">The conversion function.</param>
         /// <param name="isActive">By default the new bridge is active.</param>
         /// <returns>A new bridge.</returns>
-        public IBridge CreateFilteredBridge<T>( PerfectEventSender<T> target, Func<TEvent,bool> filter, Func<TEvent,T> converter, bool isActive = true )
+        public IBridge CreateFilteredBridge<T>( PerfectEventSender<T> target,
+                                                Func<TEvent,bool> filter,
+                                                Func<TEvent,T> converter,
+                                                bool isActive = true )
         {
             Throw.CheckNotNullArgument( filter );
+            Throw.CheckNotNullArgument( converter );
             return DoCreateBridge( target, filter, converter, isActive );
         }
 
-        IBridge DoCreateBridge<T>( PerfectEventSender<T> target, Func<TEvent, bool>? filter, Func<TEvent, T> converter, bool isActive )
+        /// <summary>
+        /// Creates a bridge between this sender and another one with a function that filters and converts at once
+        /// (think <see cref="int.TryParse(string?, out int)"/>).
+        /// </summary>
+        /// <typeparam name="T">The target's event type.</typeparam>
+        /// <param name="target">The target that will receive converted events.</param>
+        /// <param name="filterConverter">The filter and conversion function.</param>
+        /// <param name="isActive">By default the new bridge is active.</param>
+        /// <returns>A new bridge.</returns>
+        public IBridge CreateFilteredBridge<T>( PerfectEventSender<T> target,
+                                                FilterConverter<TEvent,T> filterConverter,
+                                                bool isActive = true )
+        {
+            Throw.CheckNotNullArgument( filterConverter );
+            return DoCreateBridge( target, null, filterConverter, isActive );
+        }
+
+        IBridge DoCreateBridge<T>( PerfectEventSender<T> target, Func<TEvent, bool>? filter, Delegate converter, bool isActive )
         {
             Throw.CheckNotNullArgument( target );
-            Throw.CheckNotNullArgument( converter );
             Throw.CheckArgument( "Creating a bridge from this to this sender is not allowed.", !ReferenceEquals( target, this ) );
             return new Bridge<T>( this, target, filter, converter, isActive );
         }
@@ -258,7 +279,7 @@ namespace CK.PerfectEvent
         {
             readonly PerfectEventSender<T> _target;
             readonly Func<TEvent, bool>? _filter;
-            readonly Func<TEvent, T> _converter;
+            readonly Delegate _converter;
             readonly PerfectEventSender<TEvent> _source;
             bool _isRegistered;
             bool _active;
@@ -268,7 +289,7 @@ namespace CK.PerfectEvent
             public Bridge( PerfectEventSender<TEvent> source,
                            PerfectEventSender<T> target,
                            Func<TEvent, bool>? filter,
-                           Func<TEvent, T> converter,
+                           Delegate converter,
                            bool active )
             {
                 _source = source;
@@ -390,9 +411,15 @@ namespace CK.PerfectEvent
 
             public IBridgeSender? CreateSender( TEvent e )
             {
+                if( _converter is FilterConverter<TEvent,T> fc )
+                {
+                    return fc( e, out var converted )
+                            ? new BridgeSender( this, _target, converted )
+                            : null;
+                }
                 return _filter?.Invoke( e ) == false
                         ? null
-                        : new BridgeSender( this, _target, _converter( e ) );
+                        : new BridgeSender( this, _target, ((Func<TEvent, T>)_converter)( e ) );
             }
         }
 

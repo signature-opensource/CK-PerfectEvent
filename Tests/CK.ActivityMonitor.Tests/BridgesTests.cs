@@ -13,7 +13,7 @@ using System.Diagnostics;
 namespace CK.Core.Tests.Monitoring
 {
     [TestFixture]
-    public class MultiBridgesTests
+    public class BridgesTests
     {
         sealed class TrackingBridgedSender
         {
@@ -379,6 +379,100 @@ namespace CK.Core.Tests.Monitoring
             receivedByStrings.Should().BeEquivalentTo( new[] { "From PreStrings: Hip!" }, o => o.WithStrictOrdering(),
                 "No more back bridge." );
             receivedByStrings.Clear();
+        }
+
+
+        [Test]
+        public async Task bridge_can_filter_the_events_Async()
+        {
+            var integers = new PerfectEventSender<int>();
+            var bigIntegers = new PerfectEventSender<int>();
+
+            var onlyBig = integers.CreateFilteredBridge( bigIntegers, i => i > 1000, i => i );
+            var bigToInt = bigIntegers.CreateBridge( integers, i => i );
+
+            var bigReceived = new List<int>();
+            bigIntegers.PerfectEvent.Sync += ( monitor, i ) => bigReceived.Add( i );
+            var intReceived = new List<int>();
+            integers.PerfectEvent.Sync += ( monitor, i ) => intReceived.Add( i );
+
+            await integers.RaiseAsync( TestHelper.Monitor, 1 );
+            bigReceived.Should().BeEmpty();
+            intReceived.Should().BeEquivalentTo( new[] { 1 }, o => o.WithStrictOrdering() );
+            intReceived.Clear();
+
+            await integers.RaiseAsync( TestHelper.Monitor, 2000 );
+            bigReceived.Should().BeEquivalentTo( new[] { 2000 }, o => o.WithStrictOrdering() );
+            bigReceived.Clear();
+            intReceived.Should().BeEquivalentTo( new[] { 2000 }, o => o.WithStrictOrdering() );
+            intReceived.Clear();
+
+            await bigIntegers.RaiseAsync( TestHelper.Monitor, 3000 );
+            bigReceived.Should().BeEquivalentTo( new[] { 3000 }, o => o.WithStrictOrdering() );
+            bigReceived.Clear();
+            intReceived.Should().BeEquivalentTo( new[] { 3000 }, o => o.WithStrictOrdering() );
+            intReceived.Clear();
+
+            // Now we add a bridge from integers to bigIntegers that multiplies the integer.
+            var intMultiplier = integers.CreateBridge( bigIntegers, i => i * 100 );
+
+            // The filter is on the bridge, not on the target!
+            // Adding an optional filter to the target itself may be useful one day...
+            await integers.RaiseAsync( TestHelper.Monitor, 2 );
+            // The filter and the multiplier did their job: 2 is filtered out and multiplied has been received.
+            bigReceived.Should().BeEquivalentTo( new[] { 200 }, o => o.WithStrictOrdering() );
+            bigReceived.Clear();
+            intReceived.Should().BeEquivalentTo( new[] { 2 }, o => o.WithStrictOrdering() );
+            intReceived.Clear();
+
+            await integers.RaiseAsync( TestHelper.Monitor, 2000 );
+            // The filter let the initial big flow.
+            // The multiplied came later but AllowMultipleEvents is false.
+            bigReceived.Should().BeEquivalentTo( new[] { 2000 }, o => o.WithStrictOrdering() );
+            bigReceived.Clear();
+            intReceived.Should().BeEquivalentTo( new[] { 2000 }, o => o.WithStrictOrdering() );
+            intReceived.Clear();
+
+            // Same as above but bigIntegers.AllowMultipleEvents is true now.
+            bigIntegers.AllowMultipleEvents = true;
+            await integers.RaiseAsync( TestHelper.Monitor, 2000 );
+            bigReceived.Should().BeEquivalentTo( new[] { 2000, 2000*100 }, o => o.WithStrictOrdering() );
+            bigReceived.Clear();
+            intReceived.Should().BeEquivalentTo( new[] { 2000 }, o => o.WithStrictOrdering() );
+            intReceived.Clear();
+
+            // Same as above but integers.AllowMultipleEvents is also true.
+            integers.AllowMultipleEvents = true;
+            await integers.RaiseAsync( TestHelper.Monitor, 2000 );
+            bigReceived.Should().BeEquivalentTo( new[] { 2000, 2000 * 100 }, o => o.WithStrictOrdering() );
+            bigReceived.Clear();
+            // integers received its initial value and the first big from bigIntegers.
+            // To receive also the 2000 * 100, the bigToInt bridge should allow more than one call.
+            // If this happens to be useful, a IBridge.MaxCallCount { get; set; } (defaults to 1) can
+            // be added (and the code in StartRaise adapted to handle this).
+            intReceived.Should().BeEquivalentTo( new[] { 2000, 2000 }, o => o.WithStrictOrdering() );
+            intReceived.Clear();
+
+        }
+
+        [Test]
+        public async Task bridge_can_filter_the_events_with_a_single_FilterConverter_method_Async()
+        {
+            var strings = new PerfectEventSender<string>();
+            var integers = new PerfectEventSender<int>();
+
+            // This can also be written like this:
+            // var sToI = strings.CreateFilteredBridge( integers, ( string s, out int i ) => int.TryParse( s, out i ) );
+            var sToI = strings.CreateFilteredBridge( integers, int.TryParse );
+
+            var intReceived = new List<int>();
+            integers.PerfectEvent.Sync += ( monitor, i ) => intReceived.Add( i );
+
+            await strings.RaiseAsync( TestHelper.Monitor, "not an int" );
+            intReceived.Should().BeEmpty();
+
+            await strings.RaiseAsync( TestHelper.Monitor, "3712" );
+            intReceived.Should().BeEquivalentTo( new[] { 3712 }, o => o.WithStrictOrdering() );
         }
 
     }

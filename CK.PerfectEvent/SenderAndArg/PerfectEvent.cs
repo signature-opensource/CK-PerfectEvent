@@ -93,7 +93,7 @@ namespace CK.PerfectEvent
         }
 
         /// <summary>
-        /// Creates a bridge from this event to another one that can filter the event before
+        /// Creates a bridge from this event to another sender that can filter the event before
         /// adapting the event type and raising the event on the target.
         /// </summary>
         /// <typeparam name="T">The target's event type.</typeparam>
@@ -102,9 +102,28 @@ namespace CK.PerfectEvent
         /// <param name="converter">The conversion function.</param>
         /// <param name="isActive">By default the new bridge is active.</param>
         /// <returns>A new bridge.</returns>
-        public IBridge CreateFilteredBridge<T>( PerfectEventSender<TSender, T> target, Func<TEvent, bool> filter, Func<TEvent, T> converter, bool isActive = true )
+        public IBridge CreateFilteredBridge<T>( PerfectEventSender<TSender,T> target,
+                                                Func<TEvent, bool> filter,
+                                                Func<TEvent, T> converter,
+                                                bool isActive = true )
         {
             return _sender.CreateFilteredBridge( target, filter, converter, isActive );
+        }
+
+        /// <summary>
+        /// Creates a bridge between this event to another sender with a function that filters and converts at once
+        /// (think <see cref="int.TryParse(string?, out int)"/>).
+        /// </summary>
+        /// <typeparam name="T">The target's event type.</typeparam>
+        /// <param name="target">The target that will receive converted events.</param>
+        /// <param name="filterConverter">The filter and conversion function.</param>
+        /// <param name="isActive">By default the new bridge is active.</param>
+        /// <returns>A new bridge.</returns>
+        public IBridge CreateFilteredBridge<T>( PerfectEventSender<TSender,T> target,
+                                                FilterConverter<TEvent, T> filterConverter,
+                                                bool isActive = true )
+        {
+            return _sender.CreateFilteredBridge( target, filterConverter, isActive );
         }
     }
 }
