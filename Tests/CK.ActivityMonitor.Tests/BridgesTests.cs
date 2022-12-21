@@ -469,10 +469,11 @@ namespace CK.Core.Tests.Monitoring
             integers.PerfectEvent.Sync += ( monitor, i ) => intReceived.Add( i );
 
             await strings.RaiseAsync( TestHelper.Monitor, "not an int" );
-            intReceived.Should().BeEmpty();
+            intReceived.Should().BeEmpty( "integers didn't receive the not parsable string." );
 
+            // We now raise a valid int string.
             await strings.RaiseAsync( TestHelper.Monitor, "3712" );
-            intReceived.Should().BeEquivalentTo( new[] { 3712 }, o => o.WithStrictOrdering() );
+            intReceived.Should().BeEquivalentTo( new[] { 3712 }, "string -> int" );
         }
 
     }

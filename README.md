@@ -114,7 +114,8 @@ event into the worker's mailbox is the best solution.
 
 ## Implementing and raising a Perfect Event
 
-A Perfect Event is implemented thanks to a [PerfectEventSender](CK.PerfectEvent/PerfectEventSender.cs). 
+A Perfect Event is implemented thanks to a [`PerfectEventSender<TEvent>`](CK.PerfectEvent/PerfectEventSender{TEvent}.cs)
+or [`PerfectEventSender<TSender,TEvent>`](CK.PerfectEvent/SenderAndArg/PerfectEventSender{TSender,TEvent}.cs)
 
 ```csharp
 class Thing : IThing
@@ -162,7 +163,7 @@ public async Task<bool> SafeRaiseAsync( IActivityMonitor monitor, TSender sender
 
 ## Adapting the event type
 
-### Covariance: when types are compatible
+### Covariance: Usafe.As when types are compatible
 The signature of the `PerfectEvent<TEvent>` locks the type to invariantly be `TEvent`.
 However, a `PerfectEvent<Dog>` should be compatible with a `PerfectEvent<Animal>`: the event should be covariant, it
 should be specified as `PerfectEvent<out TEvent>`. Unfortunately this is not possible because `PerfectEvent` is a struct
@@ -242,17 +243,21 @@ So, the bad news is that there is as of today no compile time check for this `Ad
 is that safety is nevertheless checked at runtime when `Adapt` is called: adapters are forbidden when the event is a value type
 (boxing is not handled) and the adapted type must be a reference type that is assignable from the event type.
 
-### When types are not compatible
+When this is the case, an explicit conversion and another `PerfectEventSender` are required.
+
+### Bridges: when types are not compatible
 The `Adapt` method uses [Unsafe.As](http://unsafe.as). For this to work the types must be compliant, "true covariance"
 is required: `IsAssignableFrom`, no conversion, no implicit boxing (precisely what is checked at runtime by `Adapt`).
 
 Unfortunately sometimes we need to express a more "logical" covariance, typically to expose read only facade like
-a `Dictionary<string,List<int>>` exposed as a `IReadOnlyDictionary<string,IList<int>>`.
+a `Dictionary<string,List<int>>` exposed as a `IReadOnlyDictionary<string,IReadOnlyList<int>>`.
 
 This is not valid in .Net because the dictionary value is not defined as covariant: `IDictionary<TKey,TValue>` should
 be `IDictionary<TKey,out TValue>` but it's not: the out parameter of `bool TryGetValue( TKey k, out TValue v)`
 ironically "locks" the type of the value (under the hood, `out` is just a `ref`).
 
+
+#### Creating and controlling bridges
 To handle this and any other projections, a converter function must be used. `PerfectEventSender` can be bridged
 to other ones:
 
@@ -268,6 +273,11 @@ Note: `AsIReadOnlyDictionary` is a helper available in CK.Core ([here](https://g
 
 `CreateBridge` returns a [`IBridge : IDisposable`](CK.PerfectEvent/IBridge.cs): if needed a bridge can
 be activated or deactivated and definitely removed at any time.
+
+The cool side effect of this "logical covariance" solution is that conversion can be done between any kind of types (string
+to int, User to DomainEvent, etc.).
+
+#### Bridges are safe
 
 An important aspect of this feature is that bridge underlying implementation guaranties that:
 
@@ -298,8 +308,61 @@ only events raised on the Source will be considered, events coming from other br
 are ignored.
 
 > Playing with "graph of senders" is not easy. Bridges should be used primarily as type
-> adapters but it's safe and can be used freely.
+> adapters but bridges are always safe and can be used freely.
 
+#### Bridges can also filter the events
+
+The `CreateFilteredBridge` methods available on the `PerfectEventSender` and on the `PerfectEvent` enables event
+filtering:
+```csharp
+/// <summary>
+/// Creates a bridge from this event to another sender that can filter the event before
+/// adapting the event type and raising the event on the target.
+/// </summary>
+/// <typeparam name="T">The target's event type.</typeparam>
+/// <param name="target">The target that will receive converted events.</param>
+/// <param name="filter">The filter that must be satisfied for the event to be raised on the target.</param>
+/// <param name="converter">The conversion function.</param>
+/// <param name="isActive">By default the new bridge is active.</param>
+/// <returns>A new bridge.</returns>
+public IBridge CreateFilteredBridge<T>( PerfectEventSender<T> target,
+                                        Func<TEvent, bool> filter,
+                                        Func<TEvent, T> converter,
+                                        bool isActive = true );
+
+/// <summary>
+/// Creates a bridge from this event to another sender with a function that filters and converts at once
+/// (think <see cref="int.TryParse(string?, out int)"/>).
+/// </summary>
+/// <typeparam name="T">The target's event type.</typeparam>
+/// <param name="target">The target that will receive converted events.</param>
+/// <param name="filterConverter">The filter and conversion function.</param>
+/// <param name="isActive">By default the new bridge is active.</param>
+/// <returns>A new bridge.</returns>
+public IBridge CreateFilteredBridge<T>( PerfectEventSender<T> target,
+                                        FilterConverter<TEvent,T> filterConverter,
+                                        bool isActive = true );
+```
+
+This is easy and powerful:
+```csharp
+var strings = new PerfectEventSender<string>();
+var integers = new PerfectEventSender<int>();
+
+// This can also be written like this:
+// var sToI = strings.CreateFilteredBridge( integers, ( string s, out int i ) => int.TryParse( s, out i ) );
+var sToI = strings.CreateFilteredBridge( integers, int.TryParse );
+
+var intReceived = new List<int>();
+integers.PerfectEvent.Sync += ( monitor, i ) => intReceived.Add( i );
+
+await strings.RaiseAsync( TestHelper.Monitor, "not an int" );
+intReceived.Should().BeEmpty( "integers didn't receive the not parsable string." );
+
+// We now raise a valid int string.
+await strings.RaiseAsync( TestHelper.Monitor, "3712" );
+intReceived.Should().BeEquivalentTo( new[] { 3712 }, "string -> int done." );
+```
 
 
 
