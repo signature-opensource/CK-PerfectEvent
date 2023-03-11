@@ -349,15 +349,20 @@ This is easy and powerful:
 var strings = new PerfectEventSender<string>();
 var integers = new PerfectEventSender<int>();
 
-// This can also be written like this:
+// This can also be written like this, but this is NOT efficient:
 // var sToI = strings.CreateFilteredBridge( integers, ( string s, out int i ) => int.TryParse( s, out i ) );
+
+// The static keyword helps you to ensure that there is no (costly) closure:
+// var sToI = strings.CreateFilteredBridge( integers, static ( string s, out int i ) => int.TryParse( s, out i ) );
+
+// But this is the simplest and most efficient form:
 var sToI = strings.CreateFilteredBridge( integers, int.TryParse );
 
 var intReceived = new List<int>();
 integers.PerfectEvent.Sync += ( monitor, i ) => intReceived.Add( i );
 
 await strings.RaiseAsync( TestHelper.Monitor, "not an int" );
-intReceived.Should().BeEmpty( "integers didn't receive the not parsable string." );
+intReceived.Should().BeEmpty( "integers didn't receive the not parseable string." );
 
 // We now raise a valid int string.
 await strings.RaiseAsync( TestHelper.Monitor, "3712" );

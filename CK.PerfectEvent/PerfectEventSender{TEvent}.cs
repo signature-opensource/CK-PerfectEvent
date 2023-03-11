@@ -14,8 +14,8 @@ namespace CK.PerfectEvent
     /// <summary>
     /// A perfect event sender offers synchronous, asynchronous and parallel asynchronous event support.
     /// <para>
-    /// Instances of this class should be kept private: only the sender object should be able to call <see cref="RaiseAsync(IActivityMonitor, TEvent)"/>
-    /// or <see cref="SafeRaiseAsync(IActivityMonitor, TEvent, string?, int)"/>.
+    /// Instances of this class should be kept private: only the sender object should be able to call <see cref="RaiseAsync(IActivityMonitor, TEvent, CancellationToken)"/>
+    /// or <see cref="SafeRaiseAsync(IActivityMonitor, TEvent, CancellationToken, string?, int)"/>.
     /// What should be exposed is the <see cref="PerfectEvent"/> property that restricts the API to event registration and bridge management.
     /// </para>
     /// </summary>
@@ -277,6 +277,25 @@ namespace CK.PerfectEvent
 
         sealed class Bridge<T> : IInternalBridge
         {
+            // We need a lock to synchronize work of Dispose, OnTargetHandlersChanged and IsActive.set.
+            // Among the object available here, we should not use:
+            // - the _source or the _target since these are public objects outside of our control,
+            // - the _filter since it is nullable.
+            // We are left with:
+            // - this bridge instance.
+            // - the converter (that is a delegate is an object).
+            // Using the converter was the first idea (up to v19.0.0) since most often this is an
+            // independent instance (a lambda or anonymous delegate). But if the lambda has no closure,
+            // the compiler generates a static reusable one. With the introduction of
+            // static anonymous functions in C#9, this should happen more often (developers are more and
+            // more aware of this). Using the converter in these conditions creates a high contention point
+            // (this is particularly true for the static x => x relay). This happens only when Activating/Deactivating or
+            // Disposing a Bridge (not often) OR when a target happens to have a null/not null change of its handlers...
+            // this happen quite often.
+            // We are left with this bridge instance or instantiate a dedicated lock object.
+            // Even if this Bridge is publicly exposed, locking it during these state transitions seems not that dangerous.
+            // Probability is low that a developer takes a lock on a Bridge.
+            // So we take the risk and avoid an allocation.
             readonly PerfectEventSender<T> _target;
             readonly Func<TEvent, bool>? _filter;
             readonly Delegate _converter;
@@ -309,7 +328,7 @@ namespace CK.PerfectEvent
 
             void OnTargetHandlersChanged()
             {
-                lock( _converter )
+                lock( this )
                 {
                     if( !_active ) return;
                     if( _target.HasHandlers )
@@ -335,7 +354,7 @@ namespace CK.PerfectEvent
                 get => _active;
                 set
                 {
-                    lock( _converter )
+                    lock( this )
                     {
                         if( value )
                         {
@@ -369,7 +388,7 @@ namespace CK.PerfectEvent
 
             public void Dispose()
             {
-                lock( _converter )
+                lock( this )
                 {
                     if( !_disposed )
                     {

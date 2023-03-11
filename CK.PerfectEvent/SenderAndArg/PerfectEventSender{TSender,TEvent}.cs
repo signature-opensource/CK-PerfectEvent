@@ -15,8 +15,8 @@ namespace CK.PerfectEvent
     /// <summary>
     /// A perfect event sender offers synchronous, asynchronous and parallel asynchronous event support.
     /// <para>
-    /// Instances of this class should be kept private: only the sender object should be able to call <see cref="RaiseAsync(IActivityMonitor, TSender, TEvent)"/>
-    /// or <see cref="SafeRaiseAsync(IActivityMonitor, TSender, TEvent, string?, int)"/>.
+    /// Instances of this class should be kept private: only the sender object should be able to call <see cref="RaiseAsync(IActivityMonitor, TSender, TEvent, CancellationToken)"/>
+    /// or <see cref="SafeRaiseAsync(IActivityMonitor, TSender, TEvent, CancellationToken, string?, int)"/>.
     /// What should be exposed is the <see cref="PerfectEvent"/> property that restricts the API to event registration and bridge management.
     /// </para>
     /// </summary>
@@ -318,7 +318,8 @@ namespace CK.PerfectEvent
 
             void OnTargetHandlersChanged()
             {
-                lock( _converter )
+                // See the discussion about this lock in PerfectEventSender<TEvent>.Bridge class.
+                lock( this )
                 {
                     if( !_active ) return;
                     if( _target.HasHandlers )
@@ -344,7 +345,8 @@ namespace CK.PerfectEvent
                 get => _active;
                 set
                 {
-                    lock( _converter )
+                    // See the discussion about this lock in PerfectEventSender<TEvent>.Bridge class.
+                    lock( this )
                     {
                         if( value )
                         {
@@ -378,7 +380,8 @@ namespace CK.PerfectEvent
 
             public void Dispose()
             {
-                lock( _converter )
+                // See the discussion about this lock in PerfectEventSender<TEvent>.Bridge class.
+                lock( this )
                 {
                     if( !_disposed )
                     {

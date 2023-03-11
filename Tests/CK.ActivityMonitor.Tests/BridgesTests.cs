@@ -298,8 +298,9 @@ namespace CK.Core.Tests.Monitoring
             var strings = new PerfectEventSender<string>();
             var numbers = new PerfectEventSender<double>();
 
-            var sTon = strings.CreateBridge( numbers, s => { double.TryParse( s, out var n ); return n; } );
-            var nTos = numbers.CreateBridge( strings, n => n.ToString() );
+            // Using static lambda is the most efficient thing to do.
+            var sTon = strings.CreateBridge( numbers, double.Parse );
+            var nTos = numbers.CreateBridge( strings, static n => n.ToString() );
 
             var received = new List<object>();
             numbers.PerfectEvent.Sync += ( monitor, o ) => received.Add( o );
@@ -461,7 +462,7 @@ namespace CK.Core.Tests.Monitoring
             var strings = new PerfectEventSender<string>();
             var integers = new PerfectEventSender<int>();
 
-            // This can also be written like this:
+            // This can also be written like this (and this is MORE EFFICIENT):
             // var sToI = strings.CreateFilteredBridge( integers, ( string s, out int i ) => int.TryParse( s, out i ) );
             var sToI = strings.CreateFilteredBridge( integers, int.TryParse );
 
@@ -469,7 +470,7 @@ namespace CK.Core.Tests.Monitoring
             integers.PerfectEvent.Sync += ( monitor, i ) => intReceived.Add( i );
 
             await strings.RaiseAsync( TestHelper.Monitor, "not an int" );
-            intReceived.Should().BeEmpty( "integers didn't receive the not parsable string." );
+            intReceived.Should().BeEmpty( "integers didn't receive the not parseable string." );
 
             // We now raise a valid int string.
             await strings.RaiseAsync( TestHelper.Monitor, "3712" );
