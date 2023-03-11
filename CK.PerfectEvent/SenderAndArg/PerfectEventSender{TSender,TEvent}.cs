@@ -223,6 +223,19 @@ namespace CK.PerfectEvent
         }
 
         /// <summary>
+        /// Creates a relay (non transformer and non filtering bridge) between this sender and another one.
+        /// The relay is a bridge: it can be <see cref="IBridge.IsActive"/> or not and <see cref="IBridge.OnlyFromSource"/>
+        /// can be changed, and must be disposed once done with it.
+        /// </summary>
+        /// <param name="target">The target that must send the same events (with the same sender) as this one.</param>
+        /// <param name="isActive">By default the new bridge is active.</param>
+        /// <returns>A new bridge.</returns>
+        public IBridge CreateRelay( PerfectEventSender<TSender,TEvent> target, bool isActive = true )
+        {
+            return CreateBridge( target, Util.FuncIdentity, isActive );
+        }
+
+        /// <summary>
         /// Creates a bridge between this sender and another one, adapting the event type.
         /// </summary>
         /// <typeparam name="T">The target's event type.</typeparam>

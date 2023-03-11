@@ -308,7 +308,7 @@ only events raised on the Source will be considered, events coming from other br
 are ignored.
 
 > Playing with "graph of senders" is not easy. Bridges should be used primarily as type
-> adapters but bridges are always safe and can be used freely.
+> adapters (or simple relays as described below) but bridges are always safe and can be used freely.
 
 #### Bridges can also filter the events
 
@@ -368,6 +368,25 @@ intReceived.Should().BeEmpty( "integers didn't receive the not parseable string.
 await strings.RaiseAsync( TestHelper.Monitor, "3712" );
 intReceived.Should().BeEquivalentTo( new[] { 3712 }, "string -> int done." );
 ```
+
+## Simple relay of events
+Relays are Bridges that don't adapt the event type. These are convenient very simple methods (the same exists
+for `PerfectEventSender<TSource,TEvent>`):
+```csharp
+/// <summary>
+/// Creates a relay (non transformer and non filtering bridge) between this sender and another one.
+/// The relay is a bridge: it can be <see cref="IBridge.IsActive"/> or not and <see cref="IBridge.OnlyFromSource"/>
+/// can be changed, and must be disposed once done with it.
+/// </summary>
+/// <param name="target">The target that must send the same events as this one.</param>
+/// <param name="isActive">By default the new bridge is active.</param>
+/// <returns>A new bridge.</returns>
+public IBridge CreateRelay( PerfectEventSender<TEvent> target, bool isActive = true )
+{
+    return CreateBridge( target, Util.FuncIdentity, isActive );
+}
+```
+Note the use of `CK.Core.Util.FuncIdentity` that reuses the same `static x => x` lambda.
 
 
 
