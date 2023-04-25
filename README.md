@@ -82,8 +82,9 @@ async Task ThingTalkedAsync( IActivityMonitor monitor, IThing thing, string e )
 
 Parallel handlers are a little bit more complex to implement and also more dangerous: as alway, concurrency must be
 handled carefully.
-The parallel handlers is not called with the origin monitor but with a `ActivityMonitor.DependentToken` that is a correlation
-identifier (actually a string that identifies its creation monitor and instant):
+The parallel handlers is not called with the origin monitor but with a `IParallelLogger` that can be used directly or
+a `ActivityMonitor.DependentToken` that is a only correlation identifier (actually a string that identifies its creation
+monitor and instant) if the originating monitor has no `IActivityMonitor.ParallelLogger`:
 
 ```csharp
 void ListenTo( IThing o )
@@ -96,13 +97,18 @@ void StopListeningTo( IThing o )
     o.Talk.ParallelAsync -= ThingTalkedAsync;
 }
 
-async Task ThingTalkedAsync( ActivityMonitor.DependentToken token, IThing thing, string e )
+async Task ThingTalkedAsync( object loggerOrToken, IThing thing, string e )
 {
-    var monitor = new ActivityMonitor();
-    using( TestHelper.Monitor.StartDependentActivity( token ) )
+    // Here we want to always work with a dependent token. 
+    if( loggerOrToken is not ActivityMonitor.DependentToken token )
     {
-      monitor.DependentActivity().Launch( token );
-      //...
+        token = ((IParallelLogger)loggerOrToken).CreateDependentToken();
+    }
+    // We create a brand new monitor (we are going to do complex stuff).
+    var monitor = new ActivityMonitor();
+    using( monitor.StartDependentActivity( token ) )
+    {
+        //...
     }
     monitor.MonitorEnd();
 }

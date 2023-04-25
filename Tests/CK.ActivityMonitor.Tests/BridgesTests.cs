@@ -132,9 +132,13 @@ namespace CK.Core.Tests.Monitoring
 
             public ActivityMonitor.DependentToken? LastToken { get; private set; }
 
-            Task OnParallelAsync( ActivityMonitor.DependentToken token, string e, CancellationToken cancel )
+            Task OnParallelAsync( object loggerOrToken, string e, CancellationToken cancel )
             {
                 e.EndsWith( _suffix ).Should().BeTrue();
+                if( loggerOrToken is not ActivityMonitor.DependentToken token )
+                {
+                    token = ((IParallelLogger)loggerOrToken).CreateDependentToken();
+                }
                 LastToken = token;
                 ++ParallelAsyncCallCount;
                 LastParallelAsync = e;
@@ -220,7 +224,7 @@ namespace CK.Core.Tests.Monitoring
                 await Task.Delay( Random.Shared.Next( 30 ), cancel );
                 lock( ordered ) { ordered.Add( $"<-Async-{msg}" ); }
             }
-            async Task SafeAddParallelASync( ActivityMonitor.DependentToken token, string msg, CancellationToken cancel )
+            async Task SafeAddParallelASync( object loggerOrToken, string msg, CancellationToken cancel )
             {
                 await Task.Delay( Random.Shared.Next( 30 ), cancel );
                 lock( ordered ) { ordered.Add( $">-ParallelAsync-{msg}" ); }

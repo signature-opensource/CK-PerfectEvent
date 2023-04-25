@@ -85,23 +85,23 @@ namespace CK.PerfectEvent
         public void CollectParallelTasks<TEvent>( IActivityMonitor monitor,
                                                   TEvent e,
                                                   CancellationToken cancel,
-                                                  ref ActivityMonitor.DependentToken? token,
+                                                  ref object? loggerOrToken,
                                                   ref List<Task>? tasks )
         {
             var h = _handler;
             if( h == null || cancel.IsCancellationRequested ) return;
-            token ??= monitor.CreateDependentToken();
+            loggerOrToken ??= monitor.CreateDependentToken();
             tasks ??= new List<Task>();
             if( h is Delegate d )
             {
-                tasks.Add( Unsafe.As<ParallelEventHandlerAsync<TEvent>>( d ).Invoke( token, e, cancel ) );
+                tasks.Add( Unsafe.As<ParallelEventHandlerAsync<TEvent>>( d ).Invoke( loggerOrToken, e, cancel ) );
             }
             else
             {
                 var all = Unsafe.As<ParallelEventHandlerAsync<TEvent>[]>( h );
                 foreach( var a in all )
                 {
-                    tasks.Add( a.Invoke( token, e, cancel ) );
+                    tasks.Add( a.Invoke( loggerOrToken, e, cancel ) );
                 }
             }
         }
@@ -144,23 +144,23 @@ namespace CK.PerfectEvent
                                                           TSender sender,
                                                           TEvent e,
                                                           CancellationToken cancel,
-                                                          ref ActivityMonitor.DependentToken? token,
+                                                          ref object? loggerOrToken,
                                                           ref List<Task>? tasks )
         {
             var h = _handler;
             if( h == null || cancel.IsCancellationRequested ) return;
-            token ??= monitor.CreateDependentToken();
+            loggerOrToken ??= monitor.CreateDependentToken();
             tasks ??= new List<Task>();
             if( h is Delegate d )
             {
-                tasks.Add( Unsafe.As<ParallelEventHandlerAsync<TSender,TEvent>>( d ).Invoke( token, sender, e, cancel ) );
+                tasks.Add( Unsafe.As<ParallelEventHandlerAsync<TSender,TEvent>>( d ).Invoke( loggerOrToken, sender, e, cancel ) );
             }
             else
             {
                 var all = Unsafe.As<ParallelEventHandlerAsync<TSender,TEvent>[]>( h );
                 foreach( var a in all )
                 {
-                    tasks.Add( a.Invoke( token, sender, e, cancel ) );
+                    tasks.Add( a.Invoke( loggerOrToken, sender, e, cancel ) );
                 }
             }
         }
