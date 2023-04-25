@@ -97,7 +97,8 @@ namespace CK.Core.Tests.Monitoring
 
             Task OnParallelAsync( object loggerOrToken, int e, CancellationToken cancel )
             {
-                if( loggerOrToken is IParallelLogger logger ) logger.Warn( $"ParallelAsync {e}" );
+                // This is buggy! 
+                TestHelper.Monitor.Warn( $"ParallelAsync {e}" );
                 return Task.CompletedTask;
             }
 
@@ -178,7 +179,8 @@ namespace CK.Core.Tests.Monitoring
 
             Task OnParallelAsync( object loggerOrToken, PerfectEventTests sender, int e, CancellationToken cancel )
             {
-                if( loggerOrToken is IParallelLogger logger ) logger.Warn( $"ParallelAsync {e}" );
+                // This is buggy! 
+                TestHelper.Monitor.Warn( $"ParallelAsync {e}" );
                 return Task.CompletedTask;
             }
 

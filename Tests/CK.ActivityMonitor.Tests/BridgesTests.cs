@@ -134,12 +134,9 @@ namespace CK.Core.Tests.Monitoring
 
             Task OnParallelAsync( object loggerOrToken, string e, CancellationToken cancel )
             {
+                loggerOrToken.Should().BeOfType<ActivityMonitor.DependentToken>();
                 e.EndsWith( _suffix ).Should().BeTrue();
-                if( loggerOrToken is not ActivityMonitor.DependentToken token )
-                {
-                    token = ((IParallelLogger)loggerOrToken).CreateDependentToken();
-                }
-                LastToken = token;
+                LastToken = (ActivityMonitor.DependentToken)loggerOrToken;
                 ++ParallelAsyncCallCount;
                 LastParallelAsync = e;
                 return Task.CompletedTask;
@@ -160,10 +157,13 @@ namespace CK.Core.Tests.Monitoring
             var tA1b = new TrackingBridgedSender( tA1.Target, "A1b" );
             var tB = new TrackingBridgedSender( root, "B" );
 
+            // We need a monitor without a ParallelLoger because we check
+            // the dependent token value for different ParallelAsync.
+            var monitor = new ActivityMonitor();
             root.HasHandlers.Should().BeFalse();
             tA1a1.HandleSync = true;
             root.HasHandlers.Should().BeTrue();
-            await root.RaiseAsync( TestHelper.Monitor, "Test" );
+            await root.RaiseAsync( monitor, "Test" );
 
             tA1a1.Counts.Should().Be( (1, 0, 0) );
             tA1a1.LastOnes.Should().Be( ("Test>A!>A1!>A1a!>A1a1!", null, null) );
@@ -176,7 +176,7 @@ namespace CK.Core.Tests.Monitoring
 
             tA1a1.HandleSync = true;
             tA1a1.HandleAsync = true;
-            await root.RaiseAsync( TestHelper.Monitor, "Hop" );
+            await root.RaiseAsync( monitor, "Hop" );
 
             tA1a1.Counts.Should().Be( (2, 1, 0) );
             tA1a1.LastOnes.Should().Be( ("Hop>A!>A1!>A1a!>A1a1!", "Hop>A!>A1!>A1a!>A1a1!", null) );
@@ -187,7 +187,7 @@ namespace CK.Core.Tests.Monitoring
             tA1a1.CallConvertCount.Should().Be( 2 );
 
             tA1a1.HandleParallelAsync = true;
-            await root.RaiseAsync( TestHelper.Monitor, "Hip" );
+            await root.RaiseAsync( monitor, "Hip" );
             tA1a1.Counts.Should().Be( (3, 2, 1) );
             tA1a1.LastOnes.Should().Be( ("Hip>A!>A1!>A1a!>A1a1!", "Hip>A!>A1!>A1a!>A1a1!", "Hip>A!>A1!>A1a!>A1a1!") );
             // Converters have been called only once even if Sync, Async and ParallelAync have been raised.
@@ -253,7 +253,7 @@ namespace CK.Core.Tests.Monitoring
             tA1a.HandleParallelAsync = true;
             tB.HandleParallelAsync = true;
 
-            await root.RaiseAsync( TestHelper.Monitor, "Hop" );
+            await root.RaiseAsync( monitor, "Hop" );
             tA.Counts.Should().Be( (0, 0, 1) );
             tA.LastOnes.Should().Be( (null, null, "Hop>A!") );
             tA1.Counts.Should().Be( (0, 1, 1) );
