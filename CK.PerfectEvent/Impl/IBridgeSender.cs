@@ -28,7 +28,6 @@ namespace CK.PerfectEvent
         public readonly IActivityMonitor Monitor;
         public readonly IPerfectEventSender Source;
         public readonly CancellationToken Cancel;
-        public object? LoggerOrToken;
         public List<Task>? ParallelTasks;
         public List<IBridgeSender>? BridgeSenders;
 
@@ -37,7 +36,6 @@ namespace CK.PerfectEvent
             Monitor = monitor;
             Source = source;
             Cancel = cancel;
-            LoggerOrToken = monitor.ParallelLogger;
             ParallelTasks = null;
             BridgeSenders = null;
         }

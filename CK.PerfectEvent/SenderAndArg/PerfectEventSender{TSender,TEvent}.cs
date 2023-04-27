@@ -188,7 +188,7 @@ namespace CK.PerfectEvent
 
         void StartRaise( ref StartRaiseParams p, TSender sender, TEvent e )
         {
-            _parallelAsync.CollectParallelTasks( p.Monitor, sender, e, p.Cancel, ref p.LoggerOrToken, ref p.ParallelTasks );
+            _parallelAsync.CollectParallelTasks( p.Monitor, sender, e, p.Cancel, ref p.ParallelTasks );
             var bridges = _activeBridges;
             if( bridges.Length > 0 )
             {

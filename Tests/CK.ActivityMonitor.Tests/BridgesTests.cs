@@ -51,7 +51,6 @@ namespace CK.Core.Tests.Monitoring
                 SyncCallCount = 0;
                 AsyncCallCount = 0;
                 ParallelAsyncCallCount = 0;
-                LastToken = null;
                 LastSync = null;
                 LastAsync = null;
                 LastParallelAsync = null;
@@ -130,13 +129,9 @@ namespace CK.Core.Tests.Monitoring
 
             public string? LastParallelAsync { get; private set; }
 
-            public ActivityMonitor.DependentToken? LastToken { get; private set; }
-
-            Task OnParallelAsync( object loggerOrToken, string e, CancellationToken cancel )
+            Task OnParallelAsync( IParallelLogger logger, string e, CancellationToken cancel )
             {
-                loggerOrToken.Should().BeOfType<ActivityMonitor.DependentToken>();
                 e.EndsWith( _suffix ).Should().BeTrue();
-                LastToken = (ActivityMonitor.DependentToken)loggerOrToken;
                 ++ParallelAsyncCallCount;
                 LastParallelAsync = e;
                 return Task.CompletedTask;
@@ -195,7 +190,6 @@ namespace CK.Core.Tests.Monitoring
             tA1.CallConvertCount.Should().Be( 3 );
             tA1a.CallConvertCount.Should().Be( 3 );
             tA1a1.CallConvertCount.Should().Be( 3 );
-            tA1a1.LastToken.Should().NotBeNull();
 
             tA1a1.HandleAsync = false;
             tA1a1.HandleParallelAsync = false;
@@ -269,8 +263,6 @@ namespace CK.Core.Tests.Monitoring
             tA1a.CallConvertCount.Should().Be( 1 );
             tA1a1.CallConvertCount.Should().Be( 0 );
             tB.CallConvertCount.Should().Be( 1 );
-            tA.LastToken.Should().NotBeNull().And.BeSameAs( tA1.LastToken ).And.BeSameAs( tA1a.LastToken ).And.BeSameAs( tB.LastToken );
-            tA1a1.LastToken.Should().BeNull();
 
             ordered.Should().HaveCount( 4 + 2 * 4 + 2 * 4, "4 Sync, 2 x 4 Async and 2 x 4 ParallelAsync." );
             // Parallels are started first and do what they want (in parallel) while

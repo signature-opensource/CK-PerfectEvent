@@ -29,12 +29,11 @@ namespace CK.PerfectEvent
     /// Parallel asynchronous event handler.
     /// </summary>
     /// <typeparam name="TEvent">The type of the event.</typeparam>
-    /// <param name="loggerOrToken">
-    /// The <see cref="IParallelLogger"/> to use or a <see cref="ActivityMonitor.DependentToken"/> if the source of
-    /// the activity's monitor has no <see cref="IActivityMonitor.ParallelLogger"/>.
+    /// <param name="parallelLogger">
+    /// The <see cref="IParallelLogger"/> to use.
     /// </param>
     /// <param name="e">The event argument.</param>
     /// <param name="cancel">Cancellation token.</param>
-    public delegate Task ParallelEventHandlerAsync<TEvent>( object loggerOrToken, TEvent e, CancellationToken cancel );
+    public delegate Task ParallelEventHandlerAsync<TEvent>( IParallelLogger parallelLogger, TEvent e, CancellationToken cancel );
 
 }
