@@ -82,8 +82,7 @@ async Task ThingTalkedAsync( IActivityMonitor monitor, IThing thing, string e )
 
 Parallel handlers are a little bit more complex to implement and also more dangerous: as alway, concurrency must be
 handled carefully.
-The parallel handlers is not called with the origin monitor but with a `ActivityMonitor.DependentToken` that is a correlation
-identifier (actually a string that identifies its creation monitor and instant):
+The parallel handlers is not called with the origin monitor but with a `IParallelLogger` that can be used directly:
 
 ```csharp
 void ListenTo( IThing o )
@@ -96,13 +95,18 @@ void StopListeningTo( IThing o )
     o.Talk.ParallelAsync -= ThingTalkedAsync;
 }
 
-async Task ThingTalkedAsync( ActivityMonitor.DependentToken token, IThing thing, string e )
+async Task ThingTalkedAsync( IParallelLogger logger, IThing thing, string e )
 {
-    var monitor = new ActivityMonitor();
-    using( TestHelper.Monitor.StartDependentActivity( token ) )
+    logger.Info("I'm in the event !");
+    // logger.OpenXXX Is not supported by the IParallelLogger.
+
+    // If your event handler is a big process and need to have an ActivityMonitor, do the following:
+    var token = logger.CreateDependentToken();
+
+    var monitor = new ActivityMonitor( token );
+    using(monitor.OpenInfo("A group!"))
     {
-      monitor.DependentActivity().Launch( token );
-      //...
+
     }
     monitor.MonitorEnd();
 }
@@ -308,7 +312,7 @@ only events raised on the Source will be considered, events coming from other br
 are ignored.
 
 > Playing with "graph of senders" is not easy. Bridges should be used primarily as type
-> adapters but bridges are always safe and can be used freely.
+> adapters (or simple relays as described below) but bridges are always safe and can be used freely.
 
 #### Bridges can also filter the events
 
@@ -349,20 +353,44 @@ This is easy and powerful:
 var strings = new PerfectEventSender<string>();
 var integers = new PerfectEventSender<int>();
 
-// This can also be written like this:
+// This can also be written like this, but this is NOT efficient:
 // var sToI = strings.CreateFilteredBridge( integers, ( string s, out int i ) => int.TryParse( s, out i ) );
+
+// The static keyword helps you to ensure that there is no (costly) closure:
+// var sToI = strings.CreateFilteredBridge( integers, static ( string s, out int i ) => int.TryParse( s, out i ) );
+
+// But this is the simplest and most efficient form:
 var sToI = strings.CreateFilteredBridge( integers, int.TryParse );
 
 var intReceived = new List<int>();
 integers.PerfectEvent.Sync += ( monitor, i ) => intReceived.Add( i );
 
 await strings.RaiseAsync( TestHelper.Monitor, "not an int" );
-intReceived.Should().BeEmpty( "integers didn't receive the not parsable string." );
+intReceived.Should().BeEmpty( "integers didn't receive the not parseable string." );
 
 // We now raise a valid int string.
 await strings.RaiseAsync( TestHelper.Monitor, "3712" );
 intReceived.Should().BeEquivalentTo( new[] { 3712 }, "string -> int done." );
 ```
+
+## Simple relay of events
+Relays are Bridges that don't adapt the event type. These are convenient very simple methods (the same exists
+for `PerfectEventSender<TSource,TEvent>`):
+```csharp
+/// <summary>
+/// Creates a relay (non transformer and non filtering bridge) between this sender and another one.
+/// The relay is a bridge: it can be <see cref="IBridge.IsActive"/> or not and <see cref="IBridge.OnlyFromSource"/>
+/// can be changed, and must be disposed once done with it.
+/// </summary>
+/// <param name="target">The target that must send the same events as this one.</param>
+/// <param name="isActive">By default the new bridge is active.</param>
+/// <returns>A new bridge.</returns>
+public IBridge CreateRelay( PerfectEventSender<TEvent> target, bool isActive = true )
+{
+    return CreateBridge( target, Util.FuncIdentity, isActive );
+}
+```
+Note the use of `CK.Core.Util.FuncIdentity` that reuses the same `static x => x` lambda.
 
 
 

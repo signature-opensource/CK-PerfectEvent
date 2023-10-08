@@ -4,6 +4,7 @@ namespace CK.PerfectEvent
 {
     /// <summary>
     /// Bridge between a <see cref="Source"/> and a <see cref="Target"/>.
+    /// A bridge can transform (project) and/or filter the event or be a simple relay.
     /// </summary>
     public interface IBridge : IDisposable
     {

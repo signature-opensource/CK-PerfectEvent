@@ -95,8 +95,9 @@ namespace CK.Core.Tests.Monitoring
                 return Task.CompletedTask;
             }
 
-            Task OnParallelAsync( ActivityMonitor.DependentToken token, int e, CancellationToken cancel )
+            Task OnParallelAsync( object loggerOrToken, int e, CancellationToken cancel )
             {
+                // This is buggy! 
                 TestHelper.Monitor.Warn( $"ParallelAsync {e}" );
                 return Task.CompletedTask;
             }
@@ -176,8 +177,9 @@ namespace CK.Core.Tests.Monitoring
                 return Task.CompletedTask;
             }
 
-            Task OnParallelAsync( ActivityMonitor.DependentToken token, PerfectEventTests sender, int e, CancellationToken cancel )
+            Task OnParallelAsync( object loggerOrToken, PerfectEventTests sender, int e, CancellationToken cancel )
             {
+                // This is buggy! 
                 TestHelper.Monitor.Warn( $"ParallelAsync {e}" );
                 return Task.CompletedTask;
             }

@@ -125,7 +125,7 @@ namespace CK.Core.Tests.Monitoring
                 return Task.CompletedTask;
             }
 
-            public Task OnSoundParallelAsync( ActivityMonitor.DependentToken token, Sound e, CancellationToken cancel )
+            public Task OnSoundParallelAsync( object loggerOrToken, Sound e, CancellationToken cancel )
             {
                 Add( $"SoundParallelAsync {e.Volume}." );
                 return Task.CompletedTask;
@@ -142,7 +142,7 @@ namespace CK.Core.Tests.Monitoring
                 return Task.CompletedTask;
             }
 
-            public Task OnTalkParallelAsync( ActivityMonitor.DependentToken token, Talk e, CancellationToken cancel )
+            public Task OnTalkParallelAsync( object loggerOrToken, Talk e, CancellationToken cancel )
             {
                 Add( $"TalkParallelAsync {e.Volume}, {e.Speech}." );
                 return Task.CompletedTask;
@@ -211,7 +211,7 @@ namespace CK.Core.Tests.Monitoring
             return Task.CompletedTask;
         }
 
-        static Task HandleReadOnlyEventAsync( ActivityMonitor.DependentToken token, IReadOnlyDictionary<string, IReadOnlyList<string>> e, CancellationToken cancel )
+        static Task HandleReadOnlyEventAsync( object loggerOrToken, IReadOnlyDictionary<string, IReadOnlyList<string>> e, CancellationToken cancel )
         {
             HandleReadOnlyEvent( new ActivityMonitor(), e );
             return Task.CompletedTask;
@@ -339,7 +339,7 @@ namespace CK.Core.Tests.Monitoring
                 return Task.CompletedTask;
             }
 
-            Task OnParallelAsync( ActivityMonitor.DependentToken token, bool b, CancellationToken cancel )
+            Task OnParallelAsync( object loggerOrToken, bool b, CancellationToken cancel )
             {
                 if( b ) _received = true;
                 return Task.CompletedTask;

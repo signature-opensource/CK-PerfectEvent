@@ -7,8 +7,9 @@ using System.Threading.Tasks;
 namespace CK.PerfectEvent
 {
     /// <summary>
-    /// Delegate definition used by <see cref="CreateFilteredBridge{T}(PerfectEventSender{T}, FilterConverter{T}, bool)"/>.
+    /// Delegate definition used by <see cref="PerfectEvent{TSender}.CreateFilteredBridge{T}(PerfectEventSender{T}, FilterConverter{TSender, T}, bool)"/>.
     /// </summary>
+    /// <typeparam name="TEvent">The source event type.</typeparam>
     /// <typeparam name="T">The target event type.</typeparam>
     /// <param name="e">The event.</param>
     /// <param name="converted">The converted value. Typically <c>default</c> when this returns false.</param>

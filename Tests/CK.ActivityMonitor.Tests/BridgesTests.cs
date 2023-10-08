@@ -51,7 +51,6 @@ namespace CK.Core.Tests.Monitoring
                 SyncCallCount = 0;
                 AsyncCallCount = 0;
                 ParallelAsyncCallCount = 0;
-                LastToken = null;
                 LastSync = null;
                 LastAsync = null;
                 LastParallelAsync = null;
@@ -130,12 +129,9 @@ namespace CK.Core.Tests.Monitoring
 
             public string? LastParallelAsync { get; private set; }
 
-            public ActivityMonitor.DependentToken? LastToken { get; private set; }
-
-            Task OnParallelAsync( ActivityMonitor.DependentToken token, string e, CancellationToken cancel )
+            Task OnParallelAsync( IParallelLogger logger, string e, CancellationToken cancel )
             {
                 e.EndsWith( _suffix ).Should().BeTrue();
-                LastToken = token;
                 ++ParallelAsyncCallCount;
                 LastParallelAsync = e;
                 return Task.CompletedTask;
@@ -156,10 +152,13 @@ namespace CK.Core.Tests.Monitoring
             var tA1b = new TrackingBridgedSender( tA1.Target, "A1b" );
             var tB = new TrackingBridgedSender( root, "B" );
 
+            // We need a monitor without a ParallelLoger because we check
+            // the dependent token value for different ParallelAsync.
+            var monitor = new ActivityMonitor();
             root.HasHandlers.Should().BeFalse();
             tA1a1.HandleSync = true;
             root.HasHandlers.Should().BeTrue();
-            await root.RaiseAsync( TestHelper.Monitor, "Test" );
+            await root.RaiseAsync( monitor, "Test" );
 
             tA1a1.Counts.Should().Be( (1, 0, 0) );
             tA1a1.LastOnes.Should().Be( ("Test>A!>A1!>A1a!>A1a1!", null, null) );
@@ -172,7 +171,7 @@ namespace CK.Core.Tests.Monitoring
 
             tA1a1.HandleSync = true;
             tA1a1.HandleAsync = true;
-            await root.RaiseAsync( TestHelper.Monitor, "Hop" );
+            await root.RaiseAsync( monitor, "Hop" );
 
             tA1a1.Counts.Should().Be( (2, 1, 0) );
             tA1a1.LastOnes.Should().Be( ("Hop>A!>A1!>A1a!>A1a1!", "Hop>A!>A1!>A1a!>A1a1!", null) );
@@ -183,7 +182,7 @@ namespace CK.Core.Tests.Monitoring
             tA1a1.CallConvertCount.Should().Be( 2 );
 
             tA1a1.HandleParallelAsync = true;
-            await root.RaiseAsync( TestHelper.Monitor, "Hip" );
+            await root.RaiseAsync( monitor, "Hip" );
             tA1a1.Counts.Should().Be( (3, 2, 1) );
             tA1a1.LastOnes.Should().Be( ("Hip>A!>A1!>A1a!>A1a1!", "Hip>A!>A1!>A1a!>A1a1!", "Hip>A!>A1!>A1a!>A1a1!") );
             // Converters have been called only once even if Sync, Async and ParallelAync have been raised.
@@ -191,7 +190,6 @@ namespace CK.Core.Tests.Monitoring
             tA1.CallConvertCount.Should().Be( 3 );
             tA1a.CallConvertCount.Should().Be( 3 );
             tA1a1.CallConvertCount.Should().Be( 3 );
-            tA1a1.LastToken.Should().NotBeNull();
 
             tA1a1.HandleAsync = false;
             tA1a1.HandleParallelAsync = false;
@@ -220,7 +218,7 @@ namespace CK.Core.Tests.Monitoring
                 await Task.Delay( Random.Shared.Next( 30 ), cancel );
                 lock( ordered ) { ordered.Add( $"<-Async-{msg}" ); }
             }
-            async Task SafeAddParallelASync( ActivityMonitor.DependentToken token, string msg, CancellationToken cancel )
+            async Task SafeAddParallelASync( object loggerOrToken, string msg, CancellationToken cancel )
             {
                 await Task.Delay( Random.Shared.Next( 30 ), cancel );
                 lock( ordered ) { ordered.Add( $">-ParallelAsync-{msg}" ); }
@@ -249,7 +247,7 @@ namespace CK.Core.Tests.Monitoring
             tA1a.HandleParallelAsync = true;
             tB.HandleParallelAsync = true;
 
-            await root.RaiseAsync( TestHelper.Monitor, "Hop" );
+            await root.RaiseAsync( monitor, "Hop" );
             tA.Counts.Should().Be( (0, 0, 1) );
             tA.LastOnes.Should().Be( (null, null, "Hop>A!") );
             tA1.Counts.Should().Be( (0, 1, 1) );
@@ -265,8 +263,6 @@ namespace CK.Core.Tests.Monitoring
             tA1a.CallConvertCount.Should().Be( 1 );
             tA1a1.CallConvertCount.Should().Be( 0 );
             tB.CallConvertCount.Should().Be( 1 );
-            tA.LastToken.Should().NotBeNull().And.BeSameAs( tA1.LastToken ).And.BeSameAs( tA1a.LastToken ).And.BeSameAs( tB.LastToken );
-            tA1a1.LastToken.Should().BeNull();
 
             ordered.Should().HaveCount( 4 + 2 * 4 + 2 * 4, "4 Sync, 2 x 4 Async and 2 x 4 ParallelAsync." );
             // Parallels are started first and do what they want (in parallel) while
@@ -298,8 +294,9 @@ namespace CK.Core.Tests.Monitoring
             var strings = new PerfectEventSender<string>();
             var numbers = new PerfectEventSender<double>();
 
-            var sTon = strings.CreateBridge( numbers, s => { double.TryParse( s, out var n ); return n; } );
-            var nTos = numbers.CreateBridge( strings, n => n.ToString() );
+            // Using static lambda is the most efficient thing to do.
+            var sTon = strings.CreateBridge( numbers, double.Parse );
+            var nTos = numbers.CreateBridge( strings, static n => n.ToString() );
 
             var received = new List<object>();
             numbers.PerfectEvent.Sync += ( monitor, o ) => received.Add( o );
@@ -461,7 +458,7 @@ namespace CK.Core.Tests.Monitoring
             var strings = new PerfectEventSender<string>();
             var integers = new PerfectEventSender<int>();
 
-            // This can also be written like this:
+            // This can also be written like this (and this is MORE EFFICIENT):
             // var sToI = strings.CreateFilteredBridge( integers, ( string s, out int i ) => int.TryParse( s, out i ) );
             var sToI = strings.CreateFilteredBridge( integers, int.TryParse );
 
@@ -469,7 +466,7 @@ namespace CK.Core.Tests.Monitoring
             integers.PerfectEvent.Sync += ( monitor, i ) => intReceived.Add( i );
 
             await strings.RaiseAsync( TestHelper.Monitor, "not an int" );
-            intReceived.Should().BeEmpty( "integers didn't receive the not parsable string." );
+            intReceived.Should().BeEmpty( "integers didn't receive the not parseable string." );
 
             // We now raise a valid int string.
             await strings.RaiseAsync( TestHelper.Monitor, "3712" );
