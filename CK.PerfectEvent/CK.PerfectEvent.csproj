@@ -2,7 +2,6 @@
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
     <Description>Perfect events are .Net events that support 3 kind of callbacks: synchronous, sequential asynchronous and parallel asynchronous.</Description>
-    <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="CK.ActivityMonitor" Version="20.0.1--0012-develop" />
