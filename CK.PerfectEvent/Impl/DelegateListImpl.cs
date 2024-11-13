@@ -4,10 +4,8 @@ using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
-using System.Linq;
 using System.Threading;
 using System.Collections.Generic;
-using System.Threading.Channels;
 
 namespace CK.PerfectEvent;
 

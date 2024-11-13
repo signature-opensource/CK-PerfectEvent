@@ -1,17 +1,11 @@
 using System;
-using System.IO;
 using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
 using NUnit.Framework;
-using System.Xml.Linq;
 using System.Collections.Generic;
 using FluentAssertions;
-using System.Diagnostics;
 using CK.PerfectEvent;
 using System.Threading.Tasks;
 using System.Threading;
-using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using static CK.Testing.MonitorTestHelper;
 

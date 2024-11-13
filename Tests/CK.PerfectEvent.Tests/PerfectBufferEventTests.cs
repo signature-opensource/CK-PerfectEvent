@@ -3,8 +3,8 @@ using FluentAssertions;
 using CK.PerfectEvent;
 using System.Threading.Tasks;
 using System.Threading;
-using static CK.Testing.MonitorTestHelper;
 using System;
+using static CK.Testing.MonitorTestHelper;
 
 namespace CK.Core.Tests.Monitoring;
 
