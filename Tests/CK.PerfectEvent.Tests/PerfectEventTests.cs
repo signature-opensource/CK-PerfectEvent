@@ -24,7 +24,7 @@ public class PerfectEventTests
     [Test]
     public async Task subscribing_unsubscribing_and_raising_Async()
     {
-        PerfectEventSender<int> sender = new();
+        var sender = new PerfectEventSender<int>();
 
         sender.PerfectEvent.Sync += OnSync;
         sender.PerfectEvent.Async += OnAsync;
