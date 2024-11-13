@@ -46,34 +46,26 @@ public class PerfectBufferEventTests
 
     [Test]
     [CancelAfter( 1000 )]
-    public async Task CancellationToken_and_Timeout_Async( CancellationToken cancellation )
+    public async Task CancellationToken_test_Async( CancellationToken cancellation )
     {
         var sender = new PerfectEventSender<int>();
         using var buffer = new PerfectEventBuffer<int>( sender.PerfectEvent, 10 );
-
-        await FluentActions.Awaiting( async () => await buffer.WaitForAsync( 2, TimeSpan.FromMilliseconds( 2 ) ) ).Should().ThrowAsync<TimeoutException>();
-        await FluentActions.Awaiting( async () => await buffer.WaitForAsync( 2, TimeSpan.FromMilliseconds( 2 ), cancellation ) ).Should().ThrowAsync<TimeoutException>();
 
         {
             var cts = new CancellationTokenSource( 50 );
             await FluentActions.Awaiting( async () => await buffer.WaitForAsync( 2, cts.Token ) ).Should().ThrowAsync<OperationCanceledException>();
         }
-        {
-            var cts = new CancellationTokenSource( 50 );
-            await FluentActions.Awaiting( async () => await buffer.WaitForAsync( 2, TimeSpan.FromMilliseconds( 1000 ), cts.Token ) ).Should().ThrowAsync<OperationCanceledException>();
-        }
 
-        await FluentActions.Awaiting( async () => await buffer.WaitForOneAsync( TimeSpan.FromMilliseconds( 2 ) ) ).Should().ThrowAsync<TimeoutException>();
-        await FluentActions.Awaiting( async () => await buffer.WaitForOneAsync( TimeSpan.FromMilliseconds( 2 ), cancellation ) ).Should().ThrowAsync<TimeoutException>();
+        await sender.RaiseAsync( TestHelper.Monitor, 3712, cancellation );
+        (await buffer.WaitForOneAsync( cancellation )).Should().Be( 3712 );
 
         {
             var cts = new CancellationTokenSource( 50 );
-            await FluentActions.Awaiting( async () => await buffer.WaitForOneAsync( cts.Token ) ).Should().ThrowAsync<OperationCanceledException>();
+            await FluentActions.Awaiting( async () => await buffer.WaitForAsync( 2, cts.Token ) ).Should().ThrowAsync<OperationCanceledException>();
         }
-        {
-            var cts = new CancellationTokenSource( 50 );
-            await FluentActions.Awaiting( async () => await buffer.WaitForOneAsync( TimeSpan.FromMilliseconds( 1000 ), cts.Token ) ).Should().ThrowAsync<OperationCanceledException>();
-        }
+
+        await sender.RaiseAsync( TestHelper.Monitor, 42, cancellation );
+        (await buffer.WaitForOneAsync( cancellation )).Should().Be( 42 );
 
     }
 }

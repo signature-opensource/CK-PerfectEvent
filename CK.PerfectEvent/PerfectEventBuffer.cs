@@ -2,13 +2,15 @@ using CK.Core;
 using System;
 using System.Threading.Tasks;
 using System.Threading;
+using System.Runtime.CompilerServices;
 
 namespace CK.PerfectEvent;
 
 /// <summary>
 /// Allows to wait for one or more event raised by a <see cref="PerfectEvent{TEvent}"/>.
 /// <para>
-/// This is NOT thread safe and should mainly be used in tests.
+/// This does NOT handle concurrency: <see cref="WaitForAsync(int, CancellationToken)"/> or <see cref="WaitForOneAsync(CancellationToken)"/>
+/// must be called sequentially. This should mainly be used in tests.
 /// </para>
 /// </summary>
 /// <typeparam name="TEvent">The event type.</typeparam>
@@ -18,6 +20,7 @@ public sealed class PerfectEventBuffer<TEvent> : IDisposable
     readonly PerfectEvent<TEvent> _e;
     TaskCompletionSource<TEvent[]>? _waitingTask;
     int _waitingCount;
+    private CancellationTokenRegistration _cancellationRegistration;
 
     /// <summary>
     /// Initialize a new buffer with a fixed size.
@@ -61,11 +64,15 @@ public sealed class PerfectEventBuffer<TEvent> : IDisposable
     }
 
     /// <summary>
-    /// Waits for a given number of event and returns them.
+    /// Waits for a given number of event and returns them (or a canceled task if <paramref name="cancellation"/> has been signaled).
+    /// <para>
+    /// This throws a <see cref="InvalidOperationException"/> if a wait is already pending.
+    /// </para>
     /// </summary>
     /// <param name="count">Number of events. Must be positive.</param>
+    /// <param name="cancellation">Optional cancellation token.</param>
     /// <returns>The <paramref name="count"/> events.</returns>
-    public Task<TEvent[]> WaitForAsync( int count )
+    public Task<TEvent[]> WaitForAsync( int count, CancellationToken cancellation = default )
     {
         Throw.CheckArgument( count > 0 );
         lock( _collector )
@@ -75,76 +82,48 @@ public sealed class PerfectEventBuffer<TEvent> : IDisposable
             {
                 return Task.FromResult( Drain( count ) );
             }
-            _waitingTask = new TaskCompletionSource<TEvent[]>();
+            _waitingTask = new TaskCompletionSource<TEvent[]>( TaskCreationOptions.RunContinuationsAsynchronously );
+            if( cancellation.CanBeCanceled )
+            {
+                _cancellationRegistration = cancellation.UnsafeRegister( OnCancel, _waitingTask );
+                if( _waitingTask == null )
+                {
+                    Throw.DebugAssert( cancellation.IsCancellationRequested );
+                    return Task.FromCanceled<TEvent[]>( cancellation );
+                }
+            }
             _waitingCount = count;
             return _waitingTask.Task!;
         }
     }
 
-    /// <summary>
-    /// Waits for a given number of event and returns them (or returns a canceled task).
-    /// </summary>
-    /// <param name="count">Number of events. Must be positive.</param>
-    /// <param name="cancellation">Cancellation token.</param>
-    /// <returns>The <paramref name="count"/> events.</returns>
-    public Task<TEvent[]> WaitForAsync( int count, CancellationToken cancellation ) => WaitForAsync( count ).WaitAsync( cancellation );
+    void OnCancel( object? task, CancellationToken token )
+    {
+        if( _waitingTask != null && _waitingTask == task )
+        {
+            TaskCompletionSource<TEvent[]>? w = null;
+            lock( _collector )
+            {
+                if( _waitingTask != null && _waitingTask == task )
+                {
+                    w = _waitingTask;
+                    _waitingCount = 0;
+                    _waitingTask = null;
+                }
+            }
+            w?.TrySetCanceled( token );
+        }
+    }
 
     /// <summary>
-    /// Waits for a given number of event and returns them (or returns a faulted task with a <see cref="TimeoutException"/>).
+    /// Waits for a single event and returns it (or a canceled task if <paramref name="cancellation"/> has been signaled).
+    /// <para>
+    /// This throws a <see cref="InvalidOperationException"/> if a wait is already pending.
+    /// </para>
     /// </summary>
-    /// <param name="count">Number of events. Must be positive.</param>
-    /// <param name="timeout">
-    /// The timeout after which the Task should be faulted with
-    /// a <see cref="TimeoutException"/> if it hasn't otherwise completed.
-    /// </param>
-    /// <returns>The <paramref name="count"/> events.</returns>
-    public Task<TEvent[]> WaitForAsync( int count, TimeSpan timeout ) => WaitForAsync( count ).WaitAsync( timeout );
-
-    /// <summary>
-    /// Waits for a given number of event and returns them (or returns a canceled or faulted task with a <see cref="TimeoutException"/>).
-    /// </summary>
-    /// <param name="count">Number of events. Must be positive.</param>
-    /// <param name="timeout">
-    /// The timeout after which the Task should be faulted with
-    /// a <see cref="TimeoutException"/> if it hasn't otherwise completed.
-    /// </param>
-    /// <param name="cancellation">Cancellation token.</param>
-    /// <returns>The <paramref name="count"/> events.</returns>
-    public Task<TEvent[]> WaitForAsync( int count, TimeSpan timeout, CancellationToken cancellation ) => WaitForAsync( count, cancellation ).WaitAsync( timeout, cancellation );
-
-    /// <summary>
-    /// Waits for a single event and returns it.
-    /// </summary>
+    /// <param name="cancellation">Optional cancellation token.</param>
     /// <returns>The single event.</returns>
-    public async Task<TEvent> WaitForOneAsync() => (await WaitForAsync( 1 ).ConfigureAwait( false ))[0];
-
-    /// <summary>
-    /// Waits for a single event and returns it (or returns a canceled task).
-    /// </summary>
-    /// <param name="cancellation">Cancellation token.</param>
-    /// <returns>The single event.</returns>
-    public async Task<TEvent> WaitForOneAsync( CancellationToken cancellation ) => (await WaitForAsync( 1, cancellation ).ConfigureAwait( false ))[0];
-
-    /// <summary>
-    /// Waits for a single event and returns it (or returns a faulted task with a <see cref="TimeoutException"/>).
-    /// </summary>
-    /// <param name="timeout">
-    /// The timeout after which the Task should be faulted with
-    /// a <see cref="TimeoutException"/> if it hasn't otherwise completed.
-    /// </param>
-    /// <returns>The single event.</returns>
-    public async Task<TEvent> WaitForOneAsync( TimeSpan timeout ) => (await WaitForAsync( 1, timeout ).ConfigureAwait( false ))[0];
-
-    /// <summary>
-    /// Waits for a single event and returns it (or returns a canceled or faulted task with a <see cref="TimeoutException"/>).
-    /// </summary>
-    /// <param name="timeout">
-    /// The timeout after which the Task should be faulted with
-    /// a <see cref="TimeoutException"/> if it hasn't otherwise completed.
-    /// </param>
-    /// <param name="cancellation">Cancellation token.</param>
-    /// <returns>The single event.</returns>
-    public async Task<TEvent> WaitForOneAsync( TimeSpan timeout, CancellationToken cancellation ) => (await WaitForAsync( 1, timeout, cancellation ).ConfigureAwait( false ))[0];
+    public async Task<TEvent> WaitForOneAsync( CancellationToken cancellation = default ) => (await WaitForAsync( 1, cancellation ).ConfigureAwait( false ))[0];
 
     /// <summary>
     /// Gets or sets the capacity (internal buffer will be resized). If the new explicit
@@ -172,6 +151,7 @@ public sealed class PerfectEventBuffer<TEvent> : IDisposable
     {
         TaskCompletionSource<TEvent[]>? w = null;
         TEvent[]? r = null;
+        CancellationTokenRegistration cancellationRegistration = default;
         lock( _collector )
         {
             _collector.Push( e );
@@ -180,13 +160,14 @@ public sealed class PerfectEventBuffer<TEvent> : IDisposable
                 r = Drain( _waitingCount );
                 w = _waitingTask;
                 _waitingTask = null;
+                cancellationRegistration = _cancellationRegistration;
             }
         }
-
         if( w != null )
         {
+            cancellationRegistration.Dispose();
             Throw.DebugAssert( r != null );
-            w?.SetResult( r );
+            w.TrySetResult( r );
         }
     }
 
