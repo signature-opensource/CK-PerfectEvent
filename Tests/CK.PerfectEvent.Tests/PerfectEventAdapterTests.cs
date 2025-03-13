@@ -2,7 +2,8 @@ using System;
 using System.Linq;
 using NUnit.Framework;
 using System.Collections.Generic;
-using FluentAssertions;
+using Shouldly;
+using CK.Testing;
 using CK.PerfectEvent;
 using System.Threading.Tasks;
 using System.Threading;
@@ -21,7 +22,7 @@ public partial class PerfectEventAdapterTests
 
     class Talk : Sound
     {
-        public string Speech { get; init; }
+        public required string Speech { get; init; }
     }
 
     interface ISoundEmitter
@@ -61,11 +62,11 @@ public partial class PerfectEventAdapterTests
         await parrot.TalkAsync( TestHelper.Monitor, 42, "Hip!" );
         await parrot.TalkAsync( TestHelper.Monitor, 3712, "Hop!" );
 
-        receiver.Result.Should().HaveCount( 2 * 6 );
-        receiver.Result.Where( s => s.Contains( "42." ) ).Should().HaveCount( 3 );
-        receiver.Result.Where( s => s.Contains( "42, Hip!." ) ).Should().HaveCount( 3 );
-        receiver.Result.Where( s => s.Contains( "3712." ) ).Should().HaveCount( 3 );
-        receiver.Result.Where( s => s.Contains( "3712, Hop!." ) ).Should().HaveCount( 3 );
+        receiver.Result.Count.ShouldBe( 2 * 6 );
+        receiver.Result.Where( s => s.Contains( "42." ) ).Count().ShouldBe( 3 );
+        receiver.Result.Where( s => s.Contains( "42, Hip!." ) ).Count().ShouldBe( 3 );
+        receiver.Result.Where( s => s.Contains( "3712." ) ).Count().ShouldBe( 3 );
+        receiver.Result.Where( s => s.Contains( "3712, Hop!." ) ).Count().ShouldBe( 3 );
     }
 
     [Test]
@@ -73,13 +74,12 @@ public partial class PerfectEventAdapterTests
     {
         PerfectEventSender<int> sender = new();
 
-        FluentActions.Invoking( () =>
+        Util.Invokable( () =>
             {
                 sender.PerfectEvent.Adapt<object>().Sync += ( monitor, e ) => Throw.NotSupportedException( "Never called since Adapt throws." );
                 Throw.NotSupportedException( "Never called since Adapt throws." );
             }
-        ).Should()
-        .Throw<ArgumentException>();
+        ).ShouldThrow<ArgumentException>();
     }
 
     [Test]
@@ -87,13 +87,12 @@ public partial class PerfectEventAdapterTests
     {
         PerfectEventSender<Action<int>> sender = new();
 
-        FluentActions.Invoking( () =>
+        Util.Invokable( () =>
         {
             sender.PerfectEvent.Adapt<Action>().Sync += ( monitor, e ) => Throw.NotSupportedException( "Never called since Adapt throws." );
             Throw.NotSupportedException( "Never called since Adapt throws." );
         }
-        ).Should()
-        .Throw<ArgumentException>();
+        ).ShouldThrow<ArgumentException>();
 
     }
 
@@ -155,12 +154,12 @@ public partial class PerfectEventAdapterTests
         using( TestHelper.Monitor.CollectEntries( out var entries, LogLevelFilter.Info ) )
         {
             await sender.RaiseAsync( TestHelper.Monitor, i => TestHelper.Monitor.Info( $"Action {i}" ) );
-            entries.Select( e => e.Text ).Should().BeEquivalentTo( new[]
-            {
-                "Received Action and executing it.",
+            entries.Select( e => e.Text ).Order().ShouldBe(
+            [
                 "Action 3712",
+                "Received Action and executing it.",
                 "Received Delegate."
-            } );
+            ] );
         }
 
         static void OnDelegateSync( IActivityMonitor monitor, Delegate e )
@@ -181,8 +180,8 @@ public partial class PerfectEventAdapterTests
         PerfectEventSender<Dictionary<string, List<string>>> sender = new();
         var sameArguments = sender.PerfectEvent.Adapt<IReadOnlyDictionary<string, List<string>>>();
 
-        FluentActions.Invoking( () => sender.PerfectEvent.Adapt<IReadOnlyDictionary<string, IList<string>>>() )
-            .Should().Throw<ArgumentException>( @"The out modifier is just a ref: TryGetValue ""locks"" the TValue to be invariant..." );
+        Util.Invokable( () => sender.PerfectEvent.Adapt<IReadOnlyDictionary<string, IList<string>>>() )
+            .ShouldThrow<ArgumentException>( @"The out modifier is just a ref: TryGetValue ""locks"" the TValue to be invariant..." );
     }
 
     static readonly Dictionary<string, List<string>> SampleDictionary = new()
@@ -193,10 +192,10 @@ public partial class PerfectEventAdapterTests
 
     static void HandleReadOnlyEvent( IActivityMonitor monitor, IReadOnlyDictionary<string, IReadOnlyList<string>> e )
     {
-        e["One"][0].Should().Be( "A" );
-        e["Two"][1].Should().Be( "D" );
-        e.TryGetValue( "One", out var first ).Should().BeTrue();
-        first![1].Should().Be( "B" );
+        e["One"][0].ShouldBe( "A" );
+        e["Two"][1].ShouldBe( "D" );
+        e.TryGetValue( "One", out var first ).ShouldBeTrue();
+        first![1].ShouldBe( "B" );
     }
 
     static Task HandleReadOnlyEventAsync( IActivityMonitor monitor, IReadOnlyDictionary<string, IReadOnlyList<string>> e, CancellationToken cancel )
@@ -222,8 +221,8 @@ public partial class PerfectEventAdapterTests
 
         totallyBuggy.Sync += HandleReadOnlyEvent;
 
-        await FluentActions.Awaiting( () => sender.RaiseAsync( TestHelper.Monitor, SampleDictionary ) )
-                           .Should().ThrowAsync<EntryPointNotFoundException>();
+        await Util.Awaitable( () => sender.RaiseAsync( TestHelper.Monitor, SampleDictionary ) )
+                           .ShouldThrowAsync<EntryPointNotFoundException>();
     }
 
     [Test]
@@ -233,22 +232,22 @@ public partial class PerfectEventAdapterTests
         PerfectEventSender<IReadOnlyDictionary<string, IReadOnlyList<string>>> readonlyEvent = new();
         PerfectEventSender<int> stringCountEvent = new();
 
-        mutableEvent.HasHandlers.Should().BeFalse( "Nobody subscribed to anything." );
+        mutableEvent.HasHandlers.ShouldBeFalse( "Nobody subscribed to anything." );
 
         mutableEvent.CreateBridge( readonlyEvent, d => d.AsIReadOnlyDictionary<string, List<string>, IReadOnlyList<string>>() );
         mutableEvent.CreateBridge( stringCountEvent, e => e.Values.Select( l => l.Count ).Sum() );
 
-        mutableEvent.HasHandlers.Should().BeFalse( "A bridge is optimal: it doesn't register any handler until any of its downstream targets has handlers." );
+        mutableEvent.HasHandlers.ShouldBeFalse( "A bridge is optimal: it doesn't register any handler until any of its downstream targets has handlers." );
 
         readonlyEvent.PerfectEvent.Sync += HandleReadOnlyEvent;
 
-        mutableEvent.HasHandlers.Should().BeTrue( "A handler has been registered on the target: the source is aware." );
+        mutableEvent.HasHandlers.ShouldBeTrue( "A handler has been registered on the target: the source is aware." );
 
         await mutableEvent.RaiseAsync( TestHelper.Monitor, SampleDictionary );
 
         readonlyEvent.PerfectEvent.Sync -= HandleReadOnlyEvent;
 
-        mutableEvent.HasHandlers.Should().BeFalse( "The source is aware that the target has no more handlers." );
+        mutableEvent.HasHandlers.ShouldBeFalse( "The source is aware that the target has no more handlers." );
     }
 
     [Test]
@@ -260,25 +259,25 @@ public partial class PerfectEventAdapterTests
         {
             var b = mutableEvent.CreateBridge( readonlyEvent, d => d.AsIReadOnlyDictionary<string, List<string>, IReadOnlyList<string>>() );
             readonlyEvent.PerfectEvent.Sync += HandleReadOnlyEvent;
-            mutableEvent.HasHandlers.Should().BeTrue();
+            mutableEvent.HasHandlers.ShouldBeTrue();
             b.IsActive = false;
-            mutableEvent.HasHandlers.Should().BeFalse();
+            mutableEvent.HasHandlers.ShouldBeFalse();
             readonlyEvent.PerfectEvent.Sync -= HandleReadOnlyEvent;
         }
         {
             var b = mutableEvent.CreateBridge( readonlyEvent, d => d.AsIReadOnlyDictionary<string, List<string>, IReadOnlyList<string>>() );
             readonlyEvent.PerfectEvent.Async += HandleReadOnlyEventAsync;
-            mutableEvent.HasHandlers.Should().BeTrue();
+            mutableEvent.HasHandlers.ShouldBeTrue();
             b.IsActive = false;
-            mutableEvent.HasHandlers.Should().BeFalse();
+            mutableEvent.HasHandlers.ShouldBeFalse();
             readonlyEvent.PerfectEvent.Async -= HandleReadOnlyEventAsync;
         }
         {
             var b = mutableEvent.CreateBridge( readonlyEvent, d => d.AsIReadOnlyDictionary<string, List<string>, IReadOnlyList<string>>() );
             readonlyEvent.PerfectEvent.ParallelAsync += HandleReadOnlyEventAsync;
-            mutableEvent.HasHandlers.Should().BeTrue();
+            mutableEvent.HasHandlers.ShouldBeTrue();
             b.Dispose();
-            mutableEvent.HasHandlers.Should().BeFalse();
+            mutableEvent.HasHandlers.ShouldBeFalse();
             readonlyEvent.PerfectEvent.ParallelAsync -= HandleReadOnlyEventAsync;
         }
     }
@@ -312,7 +311,7 @@ public partial class PerfectEventAdapterTests
                 _received = false;
                 // Do not pass the stop token here since we don't want an OperationCanceledException here.
                 await _source.RaiseAsync( _monitor, this, default ).ConfigureAwait( false );
-                _received.Should().BeTrue();
+                _received.ShouldBeTrue();
                 switch( loopCount % 3 )
                 {
                     case 0: _adapted.PerfectEvent.Sync -= OnSync; break;
@@ -352,7 +351,7 @@ public partial class PerfectEventAdapterTests
         var tasks = guys.Select( g => Task.Run( () => g.LoopAsync( stop.Token ) ) ).ToArray();
 
         await Task.WhenAll( tasks );
-        source.HasHandlers.Should().BeFalse();
+        source.HasHandlers.ShouldBeFalse();
     }
 
 }
