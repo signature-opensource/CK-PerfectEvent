@@ -1,5 +1,5 @@
 using NUnit.Framework;
-using FluentAssertions;
+using Shouldly;
 using CK.PerfectEvent;
 using System.Threading.Tasks;
 using static CK.Testing.MonitorTestHelper;
@@ -106,7 +106,7 @@ public class BridgesTests
 
         void OnSync( IActivityMonitor monitor, string e )
         {
-            e.EndsWith( _suffix ).Should().BeTrue();
+            e.EndsWith( _suffix ).ShouldBeTrue();
             ++SyncCallCount;
             LastSync = e;
         }
@@ -117,7 +117,7 @@ public class BridgesTests
 
         Task OnAsync( IActivityMonitor monitor, string e, CancellationToken cancel )
         {
-            e.EndsWith( _suffix ).Should().BeTrue();
+            e.EndsWith( _suffix ).ShouldBeTrue();
             ++AsyncCallCount;
             LastAsync = e;
             return Task.CompletedTask;
@@ -129,7 +129,7 @@ public class BridgesTests
 
         Task OnParallelAsync( IParallelLogger logger, string e, CancellationToken cancel )
         {
-            e.EndsWith( _suffix ).Should().BeTrue();
+            e.EndsWith( _suffix ).ShouldBeTrue();
             ++ParallelAsyncCallCount;
             LastParallelAsync = e;
             return Task.CompletedTask;
@@ -153,47 +153,47 @@ public class BridgesTests
         // We need a monitor without a ParallelLoger because we check
         // the dependent token value for different ParallelAsync.
         var monitor = new ActivityMonitor();
-        root.HasHandlers.Should().BeFalse();
+        root.HasHandlers.ShouldBeFalse();
         tA1a1.HandleSync = true;
-        root.HasHandlers.Should().BeTrue();
+        root.HasHandlers.ShouldBeTrue();
         await root.RaiseAsync( monitor, "Test" );
 
-        tA1a1.Counts.Should().Be( (1, 0, 0) );
-        tA1a1.LastOnes.Should().Be( ("Test>A!>A1!>A1a!>A1a1!", null, null) );
-        tA.CallConvertCount.Should().Be( 1 );
-        tA1.CallConvertCount.Should().Be( 1 );
-        tA1a.CallConvertCount.Should().Be( 1 );
-        tA1a1.CallConvertCount.Should().Be( 1 );
+        tA1a1.Counts.ShouldBe( (1, 0, 0) );
+        tA1a1.LastOnes.ShouldBe( ("Test>A!>A1!>A1a!>A1a1!", null, null) );
+        tA.CallConvertCount.ShouldBe( 1 );
+        tA1.CallConvertCount.ShouldBe( 1 );
+        tA1a.CallConvertCount.ShouldBe( 1 );
+        tA1a1.CallConvertCount.ShouldBe( 1 );
         tA1a1.HandleSync = false;
-        root.HasHandlers.Should().BeFalse();
+        root.HasHandlers.ShouldBeFalse();
 
         tA1a1.HandleSync = true;
         tA1a1.HandleAsync = true;
         await root.RaiseAsync( monitor, "Hop" );
 
-        tA1a1.Counts.Should().Be( (2, 1, 0) );
-        tA1a1.LastOnes.Should().Be( ("Hop>A!>A1!>A1a!>A1a1!", "Hop>A!>A1!>A1a!>A1a1!", null) );
+        tA1a1.Counts.ShouldBe( (2, 1, 0) );
+        tA1a1.LastOnes.ShouldBe( ("Hop>A!>A1!>A1a!>A1a1!", "Hop>A!>A1!>A1a!>A1a1!", null) );
         // Converters have been called only once even if Sync and Async have been raised.
-        tA.CallConvertCount.Should().Be( 2 );
-        tA1.CallConvertCount.Should().Be( 2 );
-        tA1a.CallConvertCount.Should().Be( 2 );
-        tA1a1.CallConvertCount.Should().Be( 2 );
+        tA.CallConvertCount.ShouldBe( 2 );
+        tA1.CallConvertCount.ShouldBe( 2 );
+        tA1a.CallConvertCount.ShouldBe( 2 );
+        tA1a1.CallConvertCount.ShouldBe( 2 );
 
         tA1a1.HandleParallelAsync = true;
         await root.RaiseAsync( monitor, "Hip" );
-        tA1a1.Counts.Should().Be( (3, 2, 1) );
-        tA1a1.LastOnes.Should().Be( ("Hip>A!>A1!>A1a!>A1a1!", "Hip>A!>A1!>A1a!>A1a1!", "Hip>A!>A1!>A1a!>A1a1!") );
+        tA1a1.Counts.ShouldBe( (3, 2, 1) );
+        tA1a1.LastOnes.ShouldBe( ("Hip>A!>A1!>A1a!>A1a1!", "Hip>A!>A1!>A1a!>A1a1!", "Hip>A!>A1!>A1a!>A1a1!") );
         // Converters have been called only once even if Sync, Async and ParallelAync have been raised.
-        tA.CallConvertCount.Should().Be( 3 );
-        tA1.CallConvertCount.Should().Be( 3 );
-        tA1a.CallConvertCount.Should().Be( 3 );
-        tA1a1.CallConvertCount.Should().Be( 3 );
+        tA.CallConvertCount.ShouldBe( 3 );
+        tA1.CallConvertCount.ShouldBe( 3 );
+        tA1a.CallConvertCount.ShouldBe( 3 );
+        tA1a1.CallConvertCount.ShouldBe( 3 );
 
         tA1a1.HandleAsync = false;
         tA1a1.HandleParallelAsync = false;
-        root.HasHandlers.Should().BeTrue();
+        root.HasHandlers.ShouldBeTrue();
         tA1a1.HandleSync = false;
-        root.HasHandlers.Should().BeFalse();
+        root.HasHandlers.ShouldBeFalse();
 
         tA.Reset();
         tA1.Reset();
@@ -246,27 +246,29 @@ public class BridgesTests
         tB.HandleParallelAsync = true;
 
         await root.RaiseAsync( monitor, "Hop" );
-        tA.Counts.Should().Be( (0, 0, 1) );
-        tA.LastOnes.Should().Be( (null, null, "Hop>A!") );
-        tA1.Counts.Should().Be( (0, 1, 1) );
-        tA1.LastOnes.Should().Be( (null, "Hop>A!>A1!", "Hop>A!>A1!") );
-        tA1a.Counts.Should().Be( (0, 1, 1) );
-        tA1a.LastOnes.Should().Be( (null, "Hop>A!>A1!>A1a!", "Hop>A!>A1!>A1a!") );
-        tA1a1.Counts.Should().Be( (0, 0, 0) );
-        tA1a1.LastOnes.Should().Be( (null, null, null) );
-        tB.Counts.Should().Be( (0, 1, 1) );
-        tB.LastOnes.Should().Be( (null, "Hop>B!", "Hop>B!") );
-        tA.CallConvertCount.Should().Be( 1 );
-        tA1.CallConvertCount.Should().Be( 1 );
-        tA1a.CallConvertCount.Should().Be( 1 );
-        tA1a1.CallConvertCount.Should().Be( 0 );
-        tB.CallConvertCount.Should().Be( 1 );
+        tA.Counts.ShouldBe( (0, 0, 1) );
+        tA.LastOnes.ShouldBe( (null, null, "Hop>A!") );
+        tA1.Counts.ShouldBe( (0, 1, 1) );
+        tA1.LastOnes.ShouldBe( (null, "Hop>A!>A1!", "Hop>A!>A1!") );
+        tA1a.Counts.ShouldBe( (0, 1, 1) );
+        tA1a.LastOnes.ShouldBe( (null, "Hop>A!>A1!>A1a!", "Hop>A!>A1!>A1a!") );
+        tA1a1.Counts.ShouldBe( (0, 0, 0) );
+        tA1a1.LastOnes.ShouldBe( (null, null, null) );
+        tB.Counts.ShouldBe( (0, 1, 1) );
+        tB.LastOnes.ShouldBe( (null, "Hop>B!", "Hop>B!") );
+        tA.CallConvertCount.ShouldBe( 1 );
+        tA1.CallConvertCount.ShouldBe( 1 );
+        tA1a.CallConvertCount.ShouldBe( 1 );
+        tA1a1.CallConvertCount.ShouldBe( 0 );
+        tB.CallConvertCount.ShouldBe( 1 );
 
-        ordered.Should().HaveCount( 4 + 2 * 4 + 2 * 4, "4 Sync, 2 x 4 Async and 2 x 4 ParallelAsync." );
+        ordered.Count.ShouldBe( 4 + 2 * 4 + 2 * 4, "4 Sync, 2 x 4 Async and 2 x 4 ParallelAsync." );
         // Parallels are started first and do what they want (in parallel) while
         // Sync and then Async are executed.
-        var noParallel = ordered.Where( t => !t.Contains( "-ParallelAsync-" ) );
-        noParallel.Should().StartWith( new[]
+        var noParallel = ordered.Where( t => !t.Contains( "-ParallelAsync-" ) )
+                                .Take( 12 )
+                                .ToArray();
+        noParallel.ShouldBeEquivalentTo( new[]
         {
             // Synchronous callbacks are always called first (regardless of their depth in the bridges).
             // The order is deterministic: it is a breadth-first traversal of the bridges.
@@ -301,21 +303,28 @@ public class BridgesTests
         strings.PerfectEvent.Sync += ( monitor, o ) => received.Add( o );
 
         await numbers.RaiseAsync( TestHelper.Monitor, 1.0 );
-        received.Should().BeEquivalentTo( new object[] { 1.0, "1" }, o => o.WithStrictOrdering() );
+        received.Count.ShouldBe( 2 );
+        received[0].ShouldBe( 1.0 );
+        received[1].ShouldBe( "1" );
 
         received.Clear();
         await strings.RaiseAsync( TestHelper.Monitor, "3712" );
-        received.Should().BeEquivalentTo( new object[] { "3712", 3712.0 }, o => o.WithStrictOrdering() );
+        received.Count.ShouldBe( 2 );
+        received[0].ShouldBe( "3712" );
+        received[1].ShouldBe( 3712.0 );
 
         sTon.IsActive = false;
 
         received.Clear();
         await strings.RaiseAsync( TestHelper.Monitor, "3712" );
-        received.Should().BeEquivalentTo( new object[] { "3712" }, o => o.WithStrictOrdering() );
+        received.Count.ShouldBe( 1 );
+        received[0].ShouldBe( "3712" );
 
         received.Clear();
         await numbers.RaiseAsync( TestHelper.Monitor, 42 );
-        received.Should().BeEquivalentTo( new object[] { 42.0, "42" }, o => o.WithStrictOrdering() );
+        received.Count.ShouldBe( 2 );
+        received[0].ShouldBe( 42.0 );
+        received[1].ShouldBe( "42" );
 
     }
 
@@ -334,11 +343,13 @@ public class BridgesTests
         strings.PerfectEvent.Sync += ( monitor, s ) => receivedByStrings.Add( s );
 
         await strings.RaiseAsync( TestHelper.Monitor, "Hop!" );
-        receivedByObjects.Should().BeEquivalentTo( new object[] { "Hop!", 4 }, o => o.WithStrictOrdering(),
-            "First bridge is the string unchanged, second is the length: objects received both." );
+        receivedByObjects.Count.ShouldBe( 2 );
+        receivedByObjects[0].ShouldBe( "Hop!", "First bridge is the string unchanged." );
+        receivedByObjects[1].ShouldBe( 4, "Second is the length: objects received both." );
         receivedByObjects.Clear();
-        receivedByStrings.Should().BeEquivalentTo( new[] { "Hop!" }, o => o.WithStrictOrdering(),
-            "The strings received its own raising." );
+
+        receivedByStrings.Count.ShouldBe( 1 );
+        receivedByStrings[0].ShouldBe( "Hop!", "The strings received its own raising." );
         receivedByStrings.Clear();
 
         // Now, we bridge objects back to strings:
@@ -346,11 +357,14 @@ public class BridgesTests
 
         // When we send a string, the "back bridge" works.
         await strings.RaiseAsync( TestHelper.Monitor, "Hop!" );
-        receivedByStrings.Should().BeEquivalentTo( new[] { "Hop!", "From Objects: Hop!" }, o => o.WithStrictOrdering(),
-            "The back bridge did its job." );
+        receivedByStrings.Count.ShouldBe( 2 );
+        receivedByStrings[0].ShouldBe( "Hop!" );
+        receivedByStrings[1].ShouldBe( "From Objects: Hop!", "The back bridge did its job." );
         receivedByStrings.Clear();
-        receivedByObjects.Should().BeEquivalentTo( new object[] { "Hop!", 4 }, o => o.WithStrictOrdering(),
-            "The sToOLen 's => s.Length' bridge triggered only once (on the initial string)." );
+
+        receivedByObjects.Count.ShouldBe( 2 );
+        receivedByObjects[0].ShouldBe( "Hop!" );
+        receivedByObjects[1].ShouldBe( 4, "The sToOLen 's => s.Length' bridge triggered only once (on the initial string)." );
         receivedByObjects.Clear();
 
         // Raising from preStrings leads to the same result. This is coherent.
@@ -358,21 +372,30 @@ public class BridgesTests
         preStrings.CreateBridge( strings, s => "From PreStrings: " + s );
 
         await preStrings.RaiseAsync( TestHelper.Monitor, "Hip!" );
-        receivedByObjects.Should().BeEquivalentTo( new object[] { "From PreStrings: Hip!", 21 }, o => o.WithStrictOrdering(),
-            "Not a big surprise." );
+
+        // Not a big surprise.
+        receivedByObjects.Count.ShouldBe( 2 );
+        receivedByObjects[0].ShouldBe( "From PreStrings: Hip!" );
+        receivedByObjects[1].ShouldBe( 21 );
         receivedByObjects.Clear();
-        receivedByStrings.Should().BeEquivalentTo( new[] { "From PreStrings: Hip!", "From Objects: From PreStrings: Hip!" }, o => o.WithStrictOrdering(),
-            "No big surprise again." );
+
+        // No big surprise again.
+        receivedByStrings.Count.ShouldBe( 2 );
+        receivedByStrings[0].ShouldBe( "From PreStrings: Hip!" );
+        receivedByStrings[1].ShouldBe( "From Objects: From PreStrings: Hip!" );
         receivedByStrings.Clear();
 
         // This deactivate the backbridge (when sending through preStrings or strings).
         backBridge.OnlyFromSource = true;
         await preStrings.RaiseAsync( TestHelper.Monitor, "Hip!" );
-        receivedByObjects.Should().BeEquivalentTo( new object[] { "From PreStrings: Hip!", 21 }, o => o.WithStrictOrdering(),
-            "Not a big surprise." );
+
+        receivedByObjects.Count.ShouldBe( 2 );
+        receivedByObjects[0].ShouldBe( "From PreStrings: Hip!" );
+        receivedByObjects[1].ShouldBe( 21 );
         receivedByObjects.Clear();
-        receivedByStrings.Should().BeEquivalentTo( new[] { "From PreStrings: Hip!" }, o => o.WithStrictOrdering(),
-            "No more back bridge." );
+
+        receivedByStrings.Count.ShouldBe( 1 );
+        receivedByStrings[0].ShouldBe( "From PreStrings: Hip!", "No more back bridge." );
         receivedByStrings.Clear();
     }
 
@@ -392,20 +415,20 @@ public class BridgesTests
         integers.PerfectEvent.Sync += ( monitor, i ) => intReceived.Add( i );
 
         await integers.RaiseAsync( TestHelper.Monitor, 1 );
-        bigReceived.Should().BeEmpty();
-        intReceived.Should().BeEquivalentTo( new[] { 1 }, o => o.WithStrictOrdering() );
+        bigReceived.ShouldBeEmpty();
+        intReceived.ShouldHaveSingleItem().ShouldBe( 1 );
         intReceived.Clear();
 
         await integers.RaiseAsync( TestHelper.Monitor, 2000 );
-        bigReceived.Should().BeEquivalentTo( new[] { 2000 }, o => o.WithStrictOrdering() );
+        bigReceived.ShouldHaveSingleItem().ShouldBe( 2000 );
         bigReceived.Clear();
-        intReceived.Should().BeEquivalentTo( new[] { 2000 }, o => o.WithStrictOrdering() );
+        intReceived.ShouldHaveSingleItem().ShouldBe( 2000 );
         intReceived.Clear();
 
         await bigIntegers.RaiseAsync( TestHelper.Monitor, 3000 );
-        bigReceived.Should().BeEquivalentTo( new[] { 3000 }, o => o.WithStrictOrdering() );
+        bigReceived.ShouldHaveSingleItem().ShouldBe( 3000 );
         bigReceived.Clear();
-        intReceived.Should().BeEquivalentTo( new[] { 3000 }, o => o.WithStrictOrdering() );
+        intReceived.ShouldHaveSingleItem().ShouldBe( 3000 );
         intReceived.Clear();
 
         // Now we add a bridge from integers to bigIntegers that multiplies the integer.
@@ -415,37 +438,37 @@ public class BridgesTests
         // Adding an optional filter to the target itself may be useful one day...
         await integers.RaiseAsync( TestHelper.Monitor, 2 );
         // The filter and the multiplier did their job: 2 is filtered out and multiplied has been received.
-        bigReceived.Should().BeEquivalentTo( new[] { 200 }, o => o.WithStrictOrdering() );
+        bigReceived.ShouldHaveSingleItem().ShouldBe( 200 );
         bigReceived.Clear();
-        intReceived.Should().BeEquivalentTo( new[] { 2 }, o => o.WithStrictOrdering() );
+        intReceived.ShouldHaveSingleItem().ShouldBe( 2 );
         intReceived.Clear();
 
         await integers.RaiseAsync( TestHelper.Monitor, 2000 );
         // The filter let the initial big flow.
         // The multiplied came later but AllowMultipleEvents is false.
-        bigReceived.Should().BeEquivalentTo( new[] { 2000 }, o => o.WithStrictOrdering() );
+        bigReceived.ShouldHaveSingleItem().ShouldBe( 2000 );
         bigReceived.Clear();
-        intReceived.Should().BeEquivalentTo( new[] { 2000 }, o => o.WithStrictOrdering() );
+        intReceived.ShouldHaveSingleItem().ShouldBe( 2000 );
         intReceived.Clear();
 
         // Same as above but bigIntegers.AllowMultipleEvents is true now.
         bigIntegers.AllowMultipleEvents = true;
         await integers.RaiseAsync( TestHelper.Monitor, 2000 );
-        bigReceived.Should().BeEquivalentTo( new[] { 2000, 2000 * 100 }, o => o.WithStrictOrdering() );
+        bigReceived.ToArray().ShouldBeEquivalentTo( new[] { 2000, 2000 * 100 } );
         bigReceived.Clear();
-        intReceived.Should().BeEquivalentTo( new[] { 2000 }, o => o.WithStrictOrdering() );
+        intReceived.ShouldHaveSingleItem().ShouldBe( 2000 );
         intReceived.Clear();
 
         // Same as above but integers.AllowMultipleEvents is also true.
         integers.AllowMultipleEvents = true;
         await integers.RaiseAsync( TestHelper.Monitor, 2000 );
-        bigReceived.Should().BeEquivalentTo( new[] { 2000, 2000 * 100 }, o => o.WithStrictOrdering() );
+        bigReceived.ToArray().ShouldBeEquivalentTo( new[] { 2000, 2000 * 100 } );
         bigReceived.Clear();
         // integers received its initial value and the first big from bigIntegers.
         // To receive also the 2000 * 100, the bigToInt bridge should allow more than one call.
         // If this happens to be useful, a IBridge.MaxCallCount { get; set; } (defaults to 1) can
         // be added (and the code in StartRaise adapted to handle this).
-        intReceived.Should().BeEquivalentTo( new[] { 2000, 2000 }, o => o.WithStrictOrdering() );
+        intReceived.ToArray().ShouldBeEquivalentTo( new[] { 2000, 2000 } );
         intReceived.Clear();
 
     }
@@ -464,11 +487,11 @@ public class BridgesTests
         integers.PerfectEvent.Sync += ( monitor, i ) => intReceived.Add( i );
 
         await strings.RaiseAsync( TestHelper.Monitor, "not an int" );
-        intReceived.Should().BeEmpty( "integers didn't receive the not parseable string." );
+        intReceived.ShouldBeEmpty( "integers didn't receive the not parseable string." );
 
         // We now raise a valid int string.
         await strings.RaiseAsync( TestHelper.Monitor, "3712" );
-        intReceived.Should().BeEquivalentTo( new[] { 3712 }, "string -> int" );
+        intReceived.ShouldHaveSingleItem().ShouldBe( 3712, "string -> int" );
     }
 
 }

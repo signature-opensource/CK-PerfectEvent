@@ -1,5 +1,5 @@
 using NUnit.Framework;
-using FluentAssertions;
+using Shouldly;
 using CK.PerfectEvent;
 using System.Threading.Tasks;
 using System.Threading;
@@ -20,28 +20,28 @@ public class PerfectBufferEventTests
 
         await sender.RaiseAsync( TestHelper.Monitor, 0, cancellation );
         var multiple = await buffer.WaitForAsync( 1, cancellation );
-        multiple.Should().BeEquivalentTo( [0] );
+        multiple.ShouldBe( [0] );
 
         await sender.RaiseAsync( TestHelper.Monitor, 1, cancellation );
         await sender.RaiseAsync( TestHelper.Monitor, 2, cancellation );
         await sender.RaiseAsync( TestHelper.Monitor, 3, cancellation );
         await sender.RaiseAsync( TestHelper.Monitor, 4, cancellation );
         var single = await buffer.WaitForOneAsync( cancellation );
-        single.Should().Be( 1 );
+        single.ShouldBe( 1 );
         single = await buffer.WaitForOneAsync( cancellation );
-        single.Should().Be( 2 );
+        single.ShouldBe( 2 );
         single = await buffer.WaitForOneAsync( cancellation );
-        single.Should().Be( 3 );
+        single.ShouldBe( 3 );
         single = await buffer.WaitForOneAsync( cancellation );
-        single.Should().Be( 4 );
+        single.ShouldBe( 4 );
         await sender.RaiseAsync( TestHelper.Monitor, 5, cancellation );
         await sender.RaiseAsync( TestHelper.Monitor, 6, cancellation );
         await sender.RaiseAsync( TestHelper.Monitor, 7, cancellation );
         await sender.RaiseAsync( TestHelper.Monitor, 8, cancellation );
         multiple = await buffer.WaitForAsync( 3, cancellation );
-        multiple.Should().BeEquivalentTo( [5,6,7] );
+        multiple.ShouldBe( [5,6,7] );
         single = await buffer.WaitForOneAsync( cancellation );
-        single.Should().Be( 8 );
+        single.ShouldBe( 8 );
     }
 
     [Test]
@@ -53,19 +53,19 @@ public class PerfectBufferEventTests
 
         {
             var cts = new CancellationTokenSource( 50 );
-            await FluentActions.Awaiting( async () => await buffer.WaitForAsync( 2, cts.Token ) ).Should().ThrowAsync<OperationCanceledException>();
+            await Util.Awaitable( async () => await buffer.WaitForAsync( 2, cts.Token ) ).ShouldThrowAsync<OperationCanceledException>();
         }
 
         await sender.RaiseAsync( TestHelper.Monitor, 3712, cancellation );
-        (await buffer.WaitForOneAsync( cancellation )).Should().Be( 3712 );
+        (await buffer.WaitForOneAsync( cancellation )).ShouldBe( 3712 );
 
         {
             var cts = new CancellationTokenSource( 50 );
-            await FluentActions.Awaiting( async () => await buffer.WaitForAsync( 2, cts.Token ) ).Should().ThrowAsync<OperationCanceledException>();
+            await Util.Awaitable( async () => await buffer.WaitForAsync( 2, cts.Token ) ).ShouldThrowAsync<OperationCanceledException>();
         }
 
         await sender.RaiseAsync( TestHelper.Monitor, 42, cancellation );
-        (await buffer.WaitForOneAsync( cancellation )).Should().Be( 42 );
+        (await buffer.WaitForOneAsync( cancellation )).ShouldBe( 42 );
 
     }
 }
