@@ -40,10 +40,10 @@ public readonly struct PerfectEvent<TEvent>
     /// <summary>
     /// Gets the Asynchronous event registration point.
     /// <para>
-    /// Signature is <c>Action&lt;IActivityMonitor, TEvent, CancellationToken&gt;</c>
+    /// Signature is <c>Func&lt;IActivityMonitor, TEvent, CancellationToken, Task&gt;</c>
     /// </para>
     /// </summary>
-    public event SequentialEventHandlerAsync<TEvent> Async
+    public event AsyncSequentialEventHandler<TEvent> Async
     {
         add => _sender.AddAsyncSeq( value );
         remove => _sender.RemoveAsyncSeq( value );
@@ -52,10 +52,10 @@ public readonly struct PerfectEvent<TEvent>
     /// <summary>
     /// Gets the Parallel Asynchronous event registration point.
     /// <para>
-    /// Signature is <c>Action&lt;ActivityMonitor.DependentToken, TEvent, CancellationToken&gt;</c>
+    /// Signature is <c>Func&lt;ActivityMonitor.DependentToken, TEvent, CancellationToken, Task&gt;</c>
     /// </para>
     /// </summary>
-    public event ParallelEventHandlerAsync<TEvent> ParallelAsync
+    public event ParallelAsyncEventHandler<TEvent> ParallelAsync
     {
         add => _sender.AddAsyncParallel( value );
         remove => _sender.RemoveAsyncParallel( value );

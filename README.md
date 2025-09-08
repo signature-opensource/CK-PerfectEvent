@@ -177,8 +177,8 @@ public interface IPerfectEvent<out TEvent>
 {
     bool HasHandlers { get; }
     event SequentialEventHandler<TEvent> Sync;
-    event SequentialEventHandlerAsync<TEvent> Async;
-    event ParallelEventHandlerAsync<TEvent> ParallelAsync;
+    event AsyncSequentialEventHandler<TEvent> Async;
+    event ParallelAsyncEventHandler<TEvent> ParallelAsync;
 }
 ```
 This is not possible because the delegate signatures prevent it:
@@ -247,7 +247,7 @@ So, the bad news is that there is as of today no compile time check for this `Ad
 is that safety is nevertheless checked at runtime when `Adapt` is called: adapters are forbidden when the event is a value type
 (boxing is not handled) and the adapted type must be a reference type that is assignable from the event type.
 
-When this is the case, an explicit conversion and another `PerfectEventSender` are required.
+When a type conversion is required, a bridge and another `PerfectEventSender` must be used.
 
 ### Bridges: when types are not compatible
 The `Adapt` method uses [Unsafe.As](http://unsafe.as). For this to work the types must be compliant, "true covariance"
