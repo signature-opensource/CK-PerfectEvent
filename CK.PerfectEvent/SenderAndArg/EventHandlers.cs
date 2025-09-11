@@ -23,7 +23,7 @@ public delegate void SequentialEventHandler<TSender, TEvent>( IActivityMonitor m
 /// <param name="sender">The source of the event.</param>
 /// <param name="e">The event argument.</param>
 /// <param name="cancel">Cancellation token.</param>
-public delegate Task SequentialEventHandlerAsync<TSender, TEvent>( IActivityMonitor monitor, TSender sender, TEvent e, CancellationToken cancel );
+public delegate Task AsyncSequentialEventHandler<TSender, TEvent>( IActivityMonitor monitor, TSender sender, TEvent e, CancellationToken cancel );
 
 /// <summary>
 /// Parallel asynchronous event handler with sender argument.
@@ -34,4 +34,4 @@ public delegate Task SequentialEventHandlerAsync<TSender, TEvent>( IActivityMoni
 /// <param name="sender">The source of the event.</param>
 /// <param name="e">The event argument.</param>
 /// <param name="cancel">Cancellation token.</param>
-public delegate Task ParallelEventHandlerAsync<TSender, TEvent>( IParallelLogger parallelLogger, TSender sender, TEvent e, CancellationToken cancel );
+public delegate Task ParallelAsyncEventHandler<TSender, TEvent>( IParallelLogger parallelLogger, TSender sender, TEvent e, CancellationToken cancel );

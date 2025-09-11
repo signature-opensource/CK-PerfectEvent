@@ -44,7 +44,7 @@ public readonly struct PerfectEvent<TSender, TEvent>
     /// Signature is <c>Action&lt;IActivityMonitor, TSender, TEvent, CancellationToken&gt;</c>
     /// </para>
     /// </summary>
-    public event SequentialEventHandlerAsync<TSender, TEvent> Async
+    public event AsyncSequentialEventHandler<TSender, TEvent> Async
     {
         add => _sender.AddAsyncSeq( value );
         remove => _sender.RemoveAsyncSeq( value );
@@ -56,7 +56,7 @@ public readonly struct PerfectEvent<TSender, TEvent>
     /// Signature is <c>Action&lt;ActivityMonitor.DependentToken, TSender, TEvent, CancellationToken&gt;</c>
     /// </para>
     /// </summary>
-    public event ParallelEventHandlerAsync<TSender, TEvent> ParallelAsync
+    public event ParallelAsyncEventHandler<TSender, TEvent> ParallelAsync
     {
         add => _sender.AddAsyncParallel( value );
         remove => _sender.RemoveAsyncParallel( value );

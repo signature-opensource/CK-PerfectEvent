@@ -19,7 +19,7 @@ public delegate void SequentialEventHandler<TEvent>( IActivityMonitor monitor, T
 /// <param name="monitor">The monitor that must be used to log activities.</param>
 /// <param name="e">The event argument.</param>
 /// <param name="cancel">Cancellation token.</param>
-public delegate Task SequentialEventHandlerAsync<TEvent>( IActivityMonitor monitor, TEvent e, CancellationToken cancel );
+public delegate Task AsyncSequentialEventHandler<TEvent>( IActivityMonitor monitor, TEvent e, CancellationToken cancel );
 
 /// <summary>
 /// Parallel asynchronous event handler.
@@ -28,4 +28,4 @@ public delegate Task SequentialEventHandlerAsync<TEvent>( IActivityMonitor monit
 /// <param name="parallelLogger">The <see cref="IParallelLogger"/> to use.</param>
 /// <param name="e">The event argument.</param>
 /// <param name="cancel">Cancellation token.</param>
-public delegate Task ParallelEventHandlerAsync<TEvent>( IParallelLogger parallelLogger, TEvent e, CancellationToken cancel );
+public delegate Task ParallelAsyncEventHandler<TEvent>( IParallelLogger parallelLogger, TEvent e, CancellationToken cancel );

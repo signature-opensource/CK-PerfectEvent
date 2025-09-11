@@ -71,11 +71,11 @@ struct DelegateListImpl
     {
         var h = _handler;
         if( h == null || cancel.IsCancellationRequested ) return Task.CompletedTask;
-        if( h is Delegate d ) return Unsafe.As<SequentialEventHandlerAsync<TEvent>>( d ).Invoke( monitor, e, cancel );
-        return RaiseSequentialAsync( monitor, Unsafe.As<SequentialEventHandlerAsync<TEvent>[]>( h ), e, cancel );
+        if( h is Delegate d ) return Unsafe.As<AsyncSequentialEventHandler<TEvent>>( d ).Invoke( monitor, e, cancel );
+        return RaiseSequentialAsync( monitor, Unsafe.As<AsyncSequentialEventHandler<TEvent>[]>( h ), e, cancel );
     }
 
-    static async Task RaiseSequentialAsync<TEvent>( IActivityMonitor monitor, SequentialEventHandlerAsync<TEvent>[] all, TEvent e, CancellationToken cancel )
+    static async Task RaiseSequentialAsync<TEvent>( IActivityMonitor monitor, AsyncSequentialEventHandler<TEvent>[] all, TEvent e, CancellationToken cancel )
     {
         foreach( var h in all ) await h.Invoke( monitor, e, cancel ).ConfigureAwait( false );
     }
@@ -90,11 +90,11 @@ struct DelegateListImpl
         tasks ??= new List<Task>();
         if( h is Delegate d )
         {
-            tasks.Add( Unsafe.As<ParallelEventHandlerAsync<TEvent>>( d ).Invoke( monitor.ParallelLogger, e, cancel ) );
+            tasks.Add( Unsafe.As<ParallelAsyncEventHandler<TEvent>>( d ).Invoke( monitor.ParallelLogger, e, cancel ) );
         }
         else
         {
-            var all = Unsafe.As<ParallelEventHandlerAsync<TEvent>[]>( h );
+            var all = Unsafe.As<ParallelAsyncEventHandler<TEvent>[]>( h );
             foreach( var a in all )
             {
                 tasks.Add( a.Invoke( monitor.ParallelLogger, e, cancel ) );
@@ -123,12 +123,12 @@ struct DelegateListImpl
     {
         var h = _handler;
         if( h == null || cancel.IsCancellationRequested ) return Task.CompletedTask;
-        if( h is Delegate d ) return Unsafe.As<SequentialEventHandlerAsync<TSender, TEvent>>( d ).Invoke( monitor, sender, e, cancel );
-        return RaiseSequentialAsync( monitor, Unsafe.As<SequentialEventHandlerAsync<TSender, TEvent>[]>( h ), sender, e, cancel );
+        if( h is Delegate d ) return Unsafe.As<AsyncSequentialEventHandler<TSender, TEvent>>( d ).Invoke( monitor, sender, e, cancel );
+        return RaiseSequentialAsync( monitor, Unsafe.As<AsyncSequentialEventHandler<TSender, TEvent>[]>( h ), sender, e, cancel );
     }
 
     static async Task RaiseSequentialAsync<TSender, TEvent>( IActivityMonitor monitor,
-                                                            SequentialEventHandlerAsync<TSender, TEvent>[] all,
+                                                            AsyncSequentialEventHandler<TSender, TEvent>[] all,
                                                             TSender sender,
                                                             TEvent e,
                                                             CancellationToken cancel )
@@ -147,11 +147,11 @@ struct DelegateListImpl
         tasks ??= new List<Task>();
         if( h is Delegate d )
         {
-            tasks.Add( Unsafe.As<ParallelEventHandlerAsync<TSender, TEvent>>( d ).Invoke( monitor.ParallelLogger, sender, e, cancel ) );
+            tasks.Add( Unsafe.As<ParallelAsyncEventHandler<TSender, TEvent>>( d ).Invoke( monitor.ParallelLogger, sender, e, cancel ) );
         }
         else
         {
-            var all = Unsafe.As<ParallelEventHandlerAsync<TSender, TEvent>[]>( h );
+            var all = Unsafe.As<ParallelAsyncEventHandler<TSender, TEvent>[]>( h );
             foreach( var a in all )
             {
                 tasks.Add( a.Invoke( monitor.ParallelLogger, sender, e, cancel ) );
