@@ -4,6 +4,6 @@
     <Description>Perfect events are .Net events that support 3 kind of callbacks: synchronous, sequential asynchronous and parallel asynchronous.</Description>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="CK.ActivityMonitor" Version="25.0.2" />
+    <PackageReference Include="CK.ActivityMonitor" Version="25.0.3--0001-develop" />
   </ItemGroup>
 </Project>
