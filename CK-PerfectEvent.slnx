@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".gitignore" />
+    <File Path="appveyor.yml" />
+    <File Path="Directory.Build.props" />
+    <File Path="NuGet.config" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/Solution Items/Doc/">
+    <File Path="Common/Doc/ColoredConsoleOutput.png" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="Tests/CK.PerfectEvent.Tests/CK.PerfectEvent.Tests.csproj" />
+  </Folder>
+  <Project Path="CK.PerfectEvent/CK.PerfectEvent.csproj" />
+</Solution>
