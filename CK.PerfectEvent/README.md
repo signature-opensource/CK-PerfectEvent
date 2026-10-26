@@ -1,8 +1,8 @@
 # Perfect Event
 
-These events mimics standard .Net events but offer the support of asynchronous handlers.
+These events mimic standard .Net events but offer the support of asynchronous handlers.
 
-> Be sure to understand the [standard .Net event pattern](https://docs.microsoft.com/en-us/dotnet/csharp/event-pattern) 
+> Be sure to understand the [standard .Net event pattern](https://learn.microsoft.com/dotnet/csharp/event-pattern) 
 > before reading this.
 
 Perfect events come in two flavors:
@@ -80,7 +80,7 @@ async Task ThingTalkedAsync( IActivityMonitor monitor, IThing thing, string e, C
 
 ### Parallel handlers
 
-Parallel handlers are a little bit more complex to implement and also more dangerous: as alway, concurrency must be
+Parallel handlers are a little bit more complex to implement and also more dangerous: as always, concurrency must be
 handled carefully.
 The parallel handlers is not called with the origin monitor but with a `IParallelLogger` that can be used directly:
 
@@ -159,15 +159,21 @@ Sometimes, we want to isolate the caller from any error in the handlers (handler
 /// <param name="monitor">The monitor to use.</param>
 /// <param name="sender">The sender of the event.</param>
 /// <param name="e">The argument of the event.</param>
+/// <param name="cancel">Optional cancellation token.</param>
 /// <param name="fileName">The source filename where this event is raised.</param>
 /// <param name="lineNumber">The source line number in the filename where this event is raised.</param>
 /// <returns>True on success, false if an exception occurred.</returns>
-public async Task<bool> SafeRaiseAsync( IActivityMonitor monitor, TSender sender, TEvent e, CancellationToken cancel = default, [CallerFilePath] string? fileName = null, [CallerLineNumber] int lineNumber = 0 )
+public async Task<bool> SafeRaiseAsync( IActivityMonitor monitor,
+                                        TSender sender,
+                                        TEvent e,
+                                        CancellationToken cancel = default,
+                                        [CallerFilePath] string? fileName = null,
+                                        [CallerLineNumber] int lineNumber = 0 )
 ```
 
 ## Adapting the event type
 
-### Covariance: Usafe.As when types are compatible
+### Covariance: Unsafe.As when types are compatible
 The signature of the `PerfectEvent<TEvent>` locks the type to invariantly be `TEvent`.
 However, a `PerfectEvent<Dog>` should be compatible with a `PerfectEvent<Animal>`: the event should be covariant, it
 should be specified as `PerfectEvent<out TEvent>`. Unfortunately this is not possible because `PerfectEvent` is a struct
@@ -243,14 +249,14 @@ to have the `IsAssignableFrom` semantics).
 We cannot constrain the type this way, we cannot constrain it in any manner except the fact that the adapted type must be
 a reference type (the `class` constraint).
 
-So, the bad news is that there is as of today no compile time check for this `Adapt` method, but the good (or not so bad) news
+So, the bad news is that there is no compile time check for this `Adapt` method, but the good (or not so bad) news
 is that safety is nevertheless checked at runtime when `Adapt` is called: adapters are forbidden when the event is a value type
 (boxing is not handled) and the adapted type must be a reference type that is assignable from the event type.
 
 When a type conversion is required, a bridge and another `PerfectEventSender` must be used.
 
 ### Bridges: when types are not compatible
-The `Adapt` method uses [Unsafe.As](http://unsafe.as). For this to work the types must be compliant, "true covariance"
+The `Adapt` method uses [Unsafe.As](https://learn.microsoft.com/dotnet/api/system.runtime.compilerservices.unsafe.as). For this to work the types must be compliant, "true covariance"
 is required: `IsAssignableFrom`, no conversion, no implicit boxing (precisely what is checked at runtime by `Adapt`).
 
 Unfortunately sometimes we need to express a more "logical" covariance, typically to expose read only facade like
@@ -270,10 +276,10 @@ PerfectEventSender<Dictionary<string, List<string>>> mutableEvent = new();
 PerfectEventSender<IReadOnlyDictionary<string, IReadOnlyList<string>>> readonlyEvent = new();
 PerfectEventSender<int> stringCountEvent = new();
 
-var bReadOnly = mutableEvent.CreateBridge( readonlyEvent, e => e.AsIReadOnlyDictionary<string, List<string>, IList<string>>() );
+var bReadOnly = mutableEvent.CreateBridge( readonlyEvent, d => d.AsIReadOnlyDictionary<string, List<string>, IReadOnlyList<string>>() );
 var bCount = mutableEvent.CreateBridge( stringCountEvent, e => e.Values.Select( l => l.Count ).Sum() );
 ```
-Note: `AsIReadOnlyDictionary` is a helper available in CK.Core ([here](https://github.com/Invenietis/CK-Core/blob/master/CK.Core/Extension/DictionaryExtension.cs)).
+Note: `AsIReadOnlyDictionary` is a helper available in CK.Core ([here](https://github.com/signature-opensource/CK-Core/blob/stable/CK.Core/Extension/DictionaryExtension.cs)).
 
 `CreateBridge` returns a [`IBridge : IDisposable`](IBridge.cs): if needed a bridge can
 be activated or deactivated and definitely removed at any time.
@@ -283,9 +289,9 @@ to int, User to DomainEvent, etc.).
 
 #### Bridges are safe
 
-An important aspect of this feature is that bridge underlying implementation guaranties that:
+An important aspect of this feature is that bridge underlying implementation guarantees that:
 
-- Existing bridges has no impact on the source `HasHandlers` property as long as their targets don't have handlers. 
+- Existing bridges have no impact on the source `HasHandlers` property as long as their targets don't have handlers. 
 This property can then be confidently used on a potential source of multiple events to totally skip raising events
 (typically avoiding the event object instantiation).
 - When raising an event, the converter is called once and only if the target has registered handlers or is itself bridged to 
@@ -301,8 +307,8 @@ There is no way to obtain these capabilities "from the outside": such bridges mu
 
 **The "cycle safe" capability is crucial**: bridges can be freely established between senders without any knowledge of
 existing bridges. However, cycles are hard to figure out (even if logically sound) and the fact that more than one
-event can be raised for a single call to `RaisAsync` or `SafeRaisAsync` can be annoying. By default, a sender raises
-only one event per `RaisAsync` (the first it receives). This can be changed thanks to the
+event can be raised for a single call to `RaiseAsync` or `SafeRaiseAsync` can be annoying. By default, a sender raises
+only one event per `RaiseAsync` (the first it receives). This can be changed thanks to the
 `bool AllowMultipleEvents { get; set; }` exposed by senders.
 
 On the bridge side, the `bool OnlyFromSource { get; set; }` can restrict a bridge to its Source:
@@ -390,7 +396,34 @@ public IBridge CreateRelay( PerfectEventSender<TEvent> target, bool isActive = t
 ```
 Note the use of `CK.Core.Util.FuncIdentity` that reuses the same `static x => x` lambda.
 
+## Waiting for events: PerfectEventBuffer
 
+[`PerfectEventBuffer<TEvent>`](PerfectEventBuffer.cs) subscribes a synchronous handler to a `PerfectEvent<TEvent>`
+as soon as it is created and collects the raised events in a FIFO buffer until it is disposed. It is mainly
+meant for tests:
 
+- `Task<TEvent[]> WaitForAsync( int count, CancellationToken cancellation = default )` returns the next `count`
+  events, immediately if they are already collected.
+- `Task<TEvent> WaitForOneAsync( CancellationToken cancellation = default )` returns the next event.
+- `Capacity` and `MaxDynamicCapacity` control the size of the buffer. `new PerfectEventBuffer<TEvent>( e, capacity )`
+  creates a fixed size buffer; `new PerfectEventBuffer<TEvent>( e )` starts empty and grows up to 200 events.
+  When the buffer is full, the oldest events are dropped.
 
+The waits are not concurrent: calling `WaitForAsync` (or `WaitForOneAsync`) while a wait is pending throws an
+`InvalidOperationException`. A canceled `cancellation` cancels the returned task.
 
+```csharp
+var sender = new PerfectEventSender<int>();
+using var buffer = new PerfectEventBuffer<int>( sender.PerfectEvent, 10 );
+
+await sender.RaiseAsync( TestHelper.Monitor, 0, cancellation );
+var multiple = await buffer.WaitForAsync( 1, cancellation );
+multiple.ShouldBe( [0] );
+
+await sender.RaiseAsync( TestHelper.Monitor, 1, cancellation );
+await sender.RaiseAsync( TestHelper.Monitor, 2, cancellation );
+await sender.RaiseAsync( TestHelper.Monitor, 3, cancellation );
+await sender.RaiseAsync( TestHelper.Monitor, 4, cancellation );
+var single = await buffer.WaitForOneAsync( cancellation );
+single.ShouldBe( 1 );
+```
