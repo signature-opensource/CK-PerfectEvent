@@ -29,6 +29,7 @@ public sealed class PerfectEventBuffer<TEvent> : IDisposable
     /// </para>
     /// </summary>
     /// <param name="e">The perfect event to monitor.</param>
+    /// <param name="capacity">Fixed capacity.</param>
     public PerfectEventBuffer( PerfectEvent<TEvent> e, int capacity )
     {
         _e = e;
@@ -138,7 +139,7 @@ public sealed class PerfectEventBuffer<TEvent> : IDisposable
     /// <summary>
     ///  Gets or sets whether the <see cref="Capacity"/> is dynamic thanks to a
     ///  non zero maximal capacity. <see cref="Array.MaxLength"/> is the maximal size.
-    ///  Defaults to 0 (fixed capacity).
+    ///  Initially 0 (fixed capacity) when constructed with only a capacity, otherwise defaults to 200.
     /// </summary>
     public int MaxDynamicCapacity
     {
